@@ -10,6 +10,12 @@ import (
 
 var DB = repository.SLDB
 
+type IShortLinkService interface {
+	GenerateID() string
+	GetById(id string) (model.ShortLink, error)
+	Save(link string) (model.ShortLink, error)
+}
+
 type ShortLinkService struct {
 	Charset     string
 	IDLength    int
@@ -27,11 +33,11 @@ func (s ShortLinkService) GenerateID() string {
 	return string(b)
 }
 
-func (s ShortLinkService) GetById(id string) (model.ShorLink, error) {
+func (s ShortLinkService) GetById(id string) (model.ShortLink, error) {
 	return s.ShortLinkDB.GetById(id)
 }
 
-func (s ShortLinkService) Save(link string) (model.ShorLink, error) {
+func (s ShortLinkService) Save(link string) (model.ShortLink, error) {
 	var id = s.GenerateID()
 
 	var sl, err = s.ShortLinkDB.Save(id, link)

@@ -10,20 +10,20 @@ type ShortLinkDB struct {
 	storage model.ShortLinkStorage
 }
 
-func (s *ShortLinkDB) GetById(id string) (model.ShorLink, error) {
+func (s *ShortLinkDB) GetById(id string) (model.ShortLink, error) {
 	s.storage.RLock()
 	sl, ok := s.storage.M[id]
 	defer s.storage.RUnlock()
 	if !ok {
-		return sl, fmt.Errorf("No short link with ID: %s ", id)
+		return sl, fmt.Errorf("No short link with ID: %s", id)
 	}
 
 	return sl, nil
 }
 
-func (s *ShortLinkDB) Save(id, link string) (model.ShorLink, error) {
+func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	s.storage.Lock()
-	sl := model.ShorLink{ID: id, Link: link}
+	sl := model.ShortLink{ID: id, Link: link}
 	defer s.storage.Unlock()
 	// check that id is not used
 	_, ok := s.storage.M[id]
@@ -38,6 +38,6 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShorLink, error) {
 
 var SLDB = &ShortLinkDB{
 	storage: model.ShortLinkStorage{
-		M: make(map[string]model.ShorLink),
+		M: make(map[string]model.ShortLink),
 	},
 }

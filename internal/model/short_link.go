@@ -2,17 +2,17 @@ package model
 
 import "sync"
 
-type ShorLink struct {
+type ShortLink struct {
 	ID   string
 	Link string
 }
 
 type ShortLinkStorage struct {
 	sync.RWMutex
-	M map[string]ShorLink
+	M map[string]ShortLink
 }
 
 type IShortLinkRepository interface {
-	GetById(id string) (ShorLink, error)
-	Save(id string, link string) (ShorLink, error)
+	GetById(id string) (ShortLink, error)
+	Save(id string, link string) (ShortLink, error)
 }

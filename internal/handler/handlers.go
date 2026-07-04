@@ -10,7 +10,7 @@ import (
 )
 
 type ShorLinkHandle struct {
-	ShortLinkService service.ShortLinkService
+	ShortLinkService service.IShortLinkService
 }
 
 func (s ShorLinkHandle) SaveLinkHandler(w http.ResponseWriter, r *http.Request) {
