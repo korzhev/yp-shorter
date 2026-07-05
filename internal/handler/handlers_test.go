@@ -35,7 +35,7 @@ func (m *MockShortLinkService) Save(link string) (model.ShortLink, error) {
 func TestSaveLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		shortLink := model.ShortLink{ID: "abcde", Link: link}
@@ -45,7 +45,7 @@ func TestSaveLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(link))
 		rr := httptest.NewRecorder()
 
-		h.SaveLinkHandler(rr, req)
+		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		assert.Contains(t, rr.Body.String(), "http://localhost:8080/abcde")
@@ -54,12 +54,12 @@ func TestSaveLinkHandler(t *testing.T) {
 
 	t.Run("Empty Body", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(""))
 		rr := httptest.NewRecorder()
 
-		h.SaveLinkHandler(rr, req)
+		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Empty body")
@@ -67,7 +67,7 @@ func TestSaveLinkHandler(t *testing.T) {
 
 	t.Run("Service Error", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		mockService.On("Save", link).Return(model.ShortLink{}, errors.New("internal error"))
@@ -75,7 +75,7 @@ func TestSaveLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(link))
 		rr := httptest.NewRecorder()
 
-		h.SaveLinkHandler(rr, req)
+		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "internal error")
@@ -85,7 +85,7 @@ func TestSaveLinkHandler(t *testing.T) {
 func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		id := "abcde"
 		link := "https://example.com"
@@ -96,7 +96,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandler(rr, req)
+		h.GetByIDLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusTemporaryRedirect, rr.Code)
 		assert.Equal(t, link, rr.Header().Get("Location"))
@@ -105,12 +105,12 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 	t.Run("Empty ID", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("GET", "/", nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandler(rr, req)
+		h.GetByIDLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Empty ID")
@@ -118,7 +118,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 	t.Run("Service Error", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandle{ShortLinkService: mockService}
+		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		id := "nonexistent"
 		mockService.On("GetById", id).Return(model.ShortLink{}, errors.New("not found"))
@@ -126,7 +126,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandler(rr, req)
+		h.GetByIDLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "not found")

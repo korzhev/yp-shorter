@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
-type ShorLinkHandle struct {
+type ShorLinkHandler struct {
 	ShortLinkService service.IShortLinkService
 }
 
-func (s ShorLinkHandle) SaveLinkHandler(w http.ResponseWriter, r *http.Request) {
+func (s ShorLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
@@ -37,8 +37,8 @@ func (s ShorLinkHandle) SaveLinkHandler(w http.ResponseWriter, r *http.Request) 
 	w.Write([]byte(l))
 }
 
-func (s ShorLinkHandle) GetByIDLinkHandler(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/")
+func (s ShorLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "Empty ID", http.StatusBadRequest)
 		return
