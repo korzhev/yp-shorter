@@ -13,15 +13,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-var ShortLinkHandle = handler.ShorLinkHandler{
-	ShortLinkService: service.ShortLinkService{
-		Charset:     config.ShortLinkCharset,
-		IDLength:    config.FlagShortLinkLength,
-		ShortLinkDB: repository.SLDB,
-	},
-}
-
 func RootRouter() chi.Router {
+	var ShortLinkHandle = handler.ShorLinkHandler{
+		ShortLinkService: service.ShortLinkService{
+			Charset:     config.ShortLinkCharset,
+			IDLength:    config.FlagShortLinkLength,
+			ShortLinkDB: repository.SLDB,
+		},
+	}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -34,7 +33,7 @@ func RootRouter() chi.Router {
 
 func main() {
 	config.ParseFlags()
-
+	fmt.Printf("Config: -a %s -b %s -l %v\n", config.FlagRunAddr, config.FlagBaseResultAddr, config.FlagShortLinkLength)
 	fmt.Printf("Server starting on %s\n", config.FlagRunAddr)
 	if err := http.ListenAndServe(config.FlagRunAddr, RootRouter()); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
