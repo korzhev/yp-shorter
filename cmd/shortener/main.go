@@ -16,23 +16,9 @@ import (
 var ShortLinkHandle = handler.ShorLinkHandler{
 	ShortLinkService: service.ShortLinkService{
 		Charset:     config.ShortLinkCharset,
-		IDLength:    config.ShortLinkLength,
+		IDLength:    config.FlagShortLinkLength,
 		ShortLinkDB: repository.SLDB,
 	},
-}
-
-func rootHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/" && r.Method == http.MethodPost {
-		ShortLinkHandle.SaveLinkHandlerFunc(w, r)
-		return
-	}
-
-	if r.Method == http.MethodGet && len(r.URL.Path) > 1 {
-		ShortLinkHandle.GetByIDLinkHandlerFunc(w, r)
-		return
-	}
-
-	http.Error(w, "Unknown error", http.StatusBadRequest)
 }
 
 func RootRouter() chi.Router {
@@ -47,13 +33,10 @@ func RootRouter() chi.Router {
 }
 
 func main() {
-	// mux := http.NewServeMux()
+	config.ParseFlags()
 
-	// // Handle POST /
-	// mux.HandleFunc("/", rootHandler)
-
-	fmt.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", RootRouter()); err != nil {
+	fmt.Printf("Server starting on %s\n", config.FlagRunAddr)
+	if err := http.ListenAndServe(config.FlagRunAddr, RootRouter()); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
 	}
 }

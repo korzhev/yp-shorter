@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
@@ -33,7 +34,7 @@ func (s ShorLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	l := fmt.Sprintf("http://localhost:8080/%s", sl.ID)
+	l := fmt.Sprintf("%s/%s", config.FlagBaseResultAddr, sl.ID)
 	w.Write([]byte(l))
 }
 
