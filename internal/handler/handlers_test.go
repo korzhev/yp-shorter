@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -39,7 +40,8 @@ func TestSaveLinkHandler(t *testing.T) {
 		h := ShorLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
-		shortLink := model.ShortLink{ID: "abcde", Link: link}
+		ID := "abcde"
+		shortLink := model.ShortLink{ID: ID, Link: link}
 
 		mockService.On("Save", link).Return(shortLink, nil)
 
@@ -49,7 +51,7 @@ func TestSaveLinkHandler(t *testing.T) {
 		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		assert.Contains(t, rr.Body.String(), "http://localhost:8080/abcde")
+		assert.Contains(t, rr.Body.String(), config.FlagBaseResultAddr+"/"+ID)
 		mockService.AssertExpectations(t)
 	})
 
