@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -86,6 +87,8 @@ func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
 		h := ShorLinkHandler{ShortLinkService: mockService}
+		r := chi.NewRouter()
+		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
 		id := "abcde"
 		link := "https://example.com"
@@ -96,7 +99,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandlerFunc(rr, req)
+		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusTemporaryRedirect, rr.Code)
 		assert.Equal(t, link, rr.Header().Get("Location"))
@@ -106,11 +109,14 @@ func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Empty ID", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
 		h := ShorLinkHandler{ShortLinkService: mockService}
+		r := chi.NewRouter()
+		// To test the "Empty ID" logic, we need a route that matches but results in an empty 'id' parameter
+		r.Get("/", h.GetByIDLinkHandlerFunc)
 
 		req, _ := http.NewRequest("GET", "/", nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandlerFunc(rr, req)
+		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Empty ID")
@@ -119,6 +125,8 @@ func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Service Error", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
 		h := ShorLinkHandler{ShortLinkService: mockService}
+		r := chi.NewRouter()
+		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
 		id := "nonexistent"
 		mockService.On("GetById", id).Return(model.ShortLink{}, errors.New("not found"))
@@ -126,7 +134,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
 
-		h.GetByIDLinkHandlerFunc(rr, req)
+		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "not found")
