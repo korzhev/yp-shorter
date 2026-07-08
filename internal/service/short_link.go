@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/korzhev/yp-shorter/internal/model"
-	"github.com/korzhev/yp-shorter/internal/repository"
 )
 
-var DB = repository.SLDB
+var source = rand.NewSource(time.Now().UnixNano())
+var IDSourceRand = rand.New(source)
 
 type IShortLinkService interface {
 	GenerateID() string
@@ -23,12 +23,9 @@ type ShortLinkService struct {
 }
 
 func (s ShortLinkService) GenerateID() string {
-	source := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(source)
-
 	b := make([]byte, s.IDLength)
 	for i := range b {
-		b[i] = s.Charset[r.Intn(len(s.Charset))]
+		b[i] = s.Charset[IDSourceRand.Intn(len(s.Charset))]
 	}
 	return string(b)
 }

@@ -10,23 +10,23 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
-type ShorLinkHandler struct {
+type ShortLinkHandler struct {
 	ShortLinkService service.IShortLinkService
 }
 
-func (s ShorLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
+func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 	link := string(body)
 	if link == "" {
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println(link)
 	sl, err := s.ShortLinkService.Save(link)
 
 	if err != nil {
@@ -34,11 +34,11 @@ func (s ShorLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	l := fmt.Sprintf("%s/%s", config.FlagBaseResultAddr, sl.ID)
+	l := fmt.Sprintf("%s/%s", config.Conf.FlagBaseResultAddr, sl.ID)
 	w.Write([]byte(l))
 }
 
-func (s ShorLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
+func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "Empty ID", http.StatusBadRequest)

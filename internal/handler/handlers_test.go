@@ -37,7 +37,7 @@ func (m *MockShortLinkService) Save(link string) (model.ShortLink, error) {
 func TestSaveLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		ID := "abcde"
@@ -51,13 +51,13 @@ func TestSaveLinkHandler(t *testing.T) {
 		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		assert.Contains(t, rr.Body.String(), config.FlagBaseResultAddr+"/"+ID)
+		assert.Contains(t, rr.Body.String(), config.Conf.FlagBaseResultAddr+"/"+ID)
 		mockService.AssertExpectations(t)
 	})
 
 	t.Run("Empty Body", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(""))
 		rr := httptest.NewRecorder()
@@ -70,7 +70,7 @@ func TestSaveLinkHandler(t *testing.T) {
 
 	t.Run("Service Error", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		mockService.On("Save", link).Return(model.ShortLink{}, errors.New("internal error"))
@@ -88,7 +88,7 @@ func TestSaveLinkHandler(t *testing.T) {
 func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
@@ -110,7 +110,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 	t.Run("Empty ID", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		// To test the "Empty ID" logic, we need a route that matches but results in an empty 'id' parameter
 		r.Get("/", h.GetByIDLinkHandlerFunc)
@@ -126,7 +126,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 	t.Run("Service Error", func(t *testing.T) {
 		mockService := new(MockShortLinkService)
-		h := ShorLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 

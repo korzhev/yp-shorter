@@ -36,8 +36,10 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	return sl, nil
 }
 
-var SLDB = &ShortLinkDB{
-	storage: model.ShortLinkStorage{
-		M: make(map[string]model.ShortLink),
-	},
+func NewShortLinkDB() *ShortLinkDB{
+	return &ShortLinkDB{
+		storage: model.ShortLinkStorage{
+			M: make(map[string]model.ShortLink),
+		},
+	}
 }

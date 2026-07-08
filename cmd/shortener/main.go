@@ -13,12 +13,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func RootRouter() chi.Router {
-	var ShortLinkHandle = handler.ShorLinkHandler{
+func RootRouter(c config.Config) chi.Router {
+	var ShortLinkHandle = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
-			Charset:     config.ShortLinkCharset,
-			IDLength:    config.FlagShortLinkLength,
-			ShortLinkDB: repository.SLDB,
+			Charset:     c.FlagShortLinkCharset,
+			IDLength:    c.FlagShortLinkLength,
+			ShortLinkDB: repository.NewShortLinkDB(),
 		},
 	}
 	r := chi.NewRouter()
@@ -32,10 +32,9 @@ func RootRouter() chi.Router {
 }
 
 func main() {
-	config.ParseFlags()
-	fmt.Printf("Config: -a %s -b %s -l %v\n", config.FlagRunAddr, config.FlagBaseResultAddr, config.FlagShortLinkLength)
-	fmt.Printf("Server starting on %s\n", config.FlagRunAddr)
-	if err := http.ListenAndServe(config.FlagRunAddr, RootRouter()); err != nil {
+	fmt.Printf("Config: -a %s -b %s -l %v -c %v \n", config.Conf.FlagRunAddr, config.Conf.FlagBaseResultAddr, config.Conf.FlagShortLinkLength, len(config.Conf.FlagShortLinkCharset))
+	fmt.Printf("Server starting on %s\n", config.Conf.FlagRunAddr)
+	if err := http.ListenAndServe(config.Conf.FlagRunAddr, RootRouter(config.Conf)); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
 	}
 }

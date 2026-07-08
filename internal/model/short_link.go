@@ -1,6 +1,8 @@
 package model
 
-import "sync"
+import (
+	"sync"
+)
 
 type ShortLink struct {
 	ID   string
