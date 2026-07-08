@@ -13,7 +13,8 @@ type Config struct {
 
 var Conf Config
 
-func init() {
+// test framework conflicts with init()
+func ParseFlags() {
 	flag.StringVar(&Conf.FlagShortLinkCharset, "c", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "chars to use in id generator")
 	flag.StringVar(&Conf.FlagRunAddr, "a", ":8080", "address and port to run server")
 	flag.StringVar(&Conf.FlagBaseResultAddr, "b", "http://localhost:8080", "base url for short link")
