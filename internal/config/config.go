@@ -2,15 +2,19 @@ package config
 
 import (
 	"flag"
+
+	"log"
+
+	"github.com/caarlos0/env/v6"
 )
 
-const DefaultCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const DefaultCharset ="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 type Config struct {
-	ShortLinkLength  int
-	RunAddr          string
-	BaseResultAddr   string
-	ShortLinkCharset string
+	ShortLinkLength  int    `env:"SH_LENGTH"`
+	RunAddr          string `env:"SERVER_ADDRESS"`
+	BaseResultAddr   string `env:"BASE_URL"`
+	ShortLinkCharset string `env:"SH_CHARSET"`
 }
 
 var Conf Config
@@ -22,4 +26,9 @@ func ParseFlags() {
 	flag.StringVar(&Conf.BaseResultAddr, "b", "http://localhost:8080", "base url for short link")
 	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length")
 	flag.Parse()
+
+	err := env.Parse(&Conf)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
