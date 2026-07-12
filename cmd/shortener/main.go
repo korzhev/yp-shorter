@@ -16,8 +16,8 @@ import (
 func RootRouter(c config.Config) chi.Router {
 	var ShortLinkHandle = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
-			Charset:     c.FlagShortLinkCharset,
-			IDLength:    c.FlagShortLinkLength,
+			Charset:     c.ShortLinkCharset,
+			IDLength:    c.ShortLinkLength,
 			ShortLinkDB: repository.NewShortLinkDB(),
 		},
 	}
@@ -33,9 +33,9 @@ func RootRouter(c config.Config) chi.Router {
 
 func main() {
 	config.ParseFlags()
-	fmt.Printf("Config: -a %s -b %s -l %v -c %v \n", config.Conf.FlagRunAddr, config.Conf.FlagBaseResultAddr, config.Conf.FlagShortLinkLength, len(config.Conf.FlagShortLinkCharset))
-	fmt.Printf("Server starting on %s\n", config.Conf.FlagRunAddr)
-	if err := http.ListenAndServe(config.Conf.FlagRunAddr, RootRouter(config.Conf)); err != nil {
+	fmt.Printf("Config: -a %s -b %s -l %v -c %v \n", config.Conf.RunAddr, config.Conf.BaseResultAddr, config.Conf.ShortLinkLength, len(config.Conf.ShortLinkCharset))
+	fmt.Printf("Server starting on %s\n", config.Conf.RunAddr)
+	if err := http.ListenAndServe(config.Conf.RunAddr, RootRouter(config.Conf)); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
 	}
 }

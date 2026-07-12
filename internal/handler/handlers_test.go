@@ -51,7 +51,7 @@ func TestSaveLinkHandler(t *testing.T) {
 		h.SaveLinkHandlerFunc(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		assert.Contains(t, rr.Body.String(), config.Conf.FlagBaseResultAddr+"/"+ID)
+		assert.Contains(t, rr.Body.String(), config.Conf.BaseResultAddr+"/"+ID)
 		mockService.AssertExpectations(t)
 	})
 

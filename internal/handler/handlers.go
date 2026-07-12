@@ -34,7 +34,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	l := fmt.Sprintf("%s/%s", config.Conf.FlagBaseResultAddr, sl.ID)
+	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
 	w.Write([]byte(l))
 }
 
