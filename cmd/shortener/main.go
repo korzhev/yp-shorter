@@ -6,11 +6,12 @@ import (
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/handler"
 	"github.com/korzhev/yp-shorter/internal/logger"
+	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chiMW "github.com/go-chi/chi/v5/middleware"
 )
 
 func RootRouter(c config.Config) chi.Router {
@@ -23,8 +24,10 @@ func RootRouter(c config.Config) chi.Router {
 	}
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(middleware.NewLoggerMiddleware(logger.Log))
+	// r.Use(middleware.Logger)
+	r.Use(chiMW.RedirectSlashes)
+	r.Use(chiMW.Recoverer)
 
 	r.Get("/{id}", ShortLinkHandle.GetByIDLinkHandlerFunc)
 	r.Post("/", ShortLinkHandle.SaveLinkHandlerFunc)
@@ -38,9 +41,9 @@ func main() {
 
 	logger.Log.Infow("Server starting with params",
 		"address", config.Conf.RunAddr,
-		"base url", config.Conf.BaseResultAddr,
-		"shortlink length", config.Conf.ShortLinkLength,
-		"charset length", len(config.Conf.ShortLinkCharset),
+		"baseUrl", config.Conf.BaseResultAddr,
+		"shortlinkLength", config.Conf.ShortLinkLength,
+		"charsetLength", len(config.Conf.ShortLinkCharset),
 	)
 
 	err := http.ListenAndServe(config.Conf.RunAddr, RootRouter(config.Conf))

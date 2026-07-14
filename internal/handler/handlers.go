@@ -26,7 +26,6 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-	fmt.Println(link)
 	sl, err := s.ShortLinkService.Save(link)
 
 	if err != nil {
