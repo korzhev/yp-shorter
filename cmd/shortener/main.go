@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/handler"
+	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
 
@@ -33,9 +33,18 @@ func RootRouter(c config.Config) chi.Router {
 
 func main() {
 	config.ParseFlags()
-	fmt.Printf("Config: -a %s -b %s -l %v -c %v \n", config.Conf.RunAddr, config.Conf.BaseResultAddr, config.Conf.ShortLinkLength, len(config.Conf.ShortLinkCharset))
-	fmt.Printf("Server starting on %s\n", config.Conf.RunAddr)
-	if err := http.ListenAndServe(config.Conf.RunAddr, RootRouter(config.Conf)); err != nil {
-		fmt.Printf("Error starting server: %s\n", err)
+	logger.InitLogger(config.Conf.LogLevel)
+	defer logger.Log.Sync()
+
+	logger.Log.Infow("Server starting with params",
+		"address", config.Conf.RunAddr,
+		"base url", config.Conf.BaseResultAddr,
+		"shortlink length", config.Conf.ShortLinkLength,
+		"charset length", len(config.Conf.ShortLinkCharset),
+	)
+
+	err := http.ListenAndServe(config.Conf.RunAddr, RootRouter(config.Conf))
+	if err != nil {
+		logger.Log.Errorf("Error starting server: %s\n", err)
 	}
 }

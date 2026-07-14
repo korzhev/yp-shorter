@@ -40,6 +40,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, ":8080", Conf.RunAddr)
 		assert.Equal(t, "http://localhost:8080", Conf.BaseResultAddr)
 		assert.Equal(t, 6, Conf.ShortLinkLength)
+		assert.Equal(t, "info", Conf.LogLevel)
 	})
 
 	t.Run("uses flag values", func(t *testing.T) {
@@ -49,6 +50,7 @@ func TestParseFlags(t *testing.T) {
 			"-a", ":9090",
 			"-b", "https://short.example.com",
 			"-l", "10",
+			"-ll", "debug",
 		}, nil)
 
 		ParseFlags()
@@ -57,6 +59,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, ":9090", Conf.RunAddr)
 		assert.Equal(t, "https://short.example.com", Conf.BaseResultAddr)
 		assert.Equal(t, 10, Conf.ShortLinkLength)
+		assert.Equal(t, "debug", Conf.LogLevel)
 	})
 
 	t.Run("environment variables override flag values", func(t *testing.T) {
@@ -66,11 +69,13 @@ func TestParseFlags(t *testing.T) {
 			"-a", ":9090",
 			"-b", "https://flag.example.com",
 			"-l", "10",
+			"-ll", "debug",
 		}, map[string]string{
 			"SH_CHARSET":     "xyz",
 			"SERVER_ADDRESS": ":7070",
 			"BASE_URL":       "https://env.example.com",
 			"SH_LENGTH":      "12",
+			"LOG_LEVEL":      "warn",
 		})
 
 		ParseFlags()
@@ -79,6 +84,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, ":7070", Conf.RunAddr)
 		assert.Equal(t, "https://env.example.com", Conf.BaseResultAddr)
 		assert.Equal(t, 12, Conf.ShortLinkLength)
+		assert.Equal(t, "warn", Conf.LogLevel)
 	})
 
 }
