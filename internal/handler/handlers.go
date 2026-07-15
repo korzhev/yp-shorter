@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/korzhev/yp-shorter/internal/config"
+	"github.com/korzhev/yp-shorter/internal/logger"
+	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
@@ -51,4 +54,40 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Location", sl.Link)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	var req model.ShortLinkRequest
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		http.Error(w, "Cannot decode request JSON body", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	link := req.URL
+	if link == "" {
+		logger.Log.Infow("Empty URL")
+		http.Error(w, "Empty URL", http.StatusBadRequest)
+		return
+	}
+	sl, err := s.ShortLinkService.Save(link)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
+	res := model.ShortLinkResponse{
+		Result: l,
+	}
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(res); err != nil {
+		logger.Log.Infow("Enccoding response", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 }

@@ -31,6 +31,7 @@ func RootRouter(c config.Config) chi.Router {
 
 	r.Get("/{id}", ShortLinkHandle.GetByIDLinkHandlerFunc)
 	r.Post("/", ShortLinkHandle.SaveLinkHandlerFunc)
+	r.Post("/api/shorten", ShortLinkHandle.APISaveLinkHandlerFunc)
 	return r
 }
 
