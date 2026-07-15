@@ -75,6 +75,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 	sl, err := s.ShortLinkService.Save(link)
 
 	if err != nil {
+		logger.Log.Infow("Unexpected error while saving short link", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -83,11 +84,12 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		Result: l,
 	}
 	enc := json.NewEncoder(w)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	if err := enc.Encode(res); err != nil {
 		logger.Log.Infow("Enccoding response", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+
 }

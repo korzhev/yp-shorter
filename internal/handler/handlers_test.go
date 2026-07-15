@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/korzhev/yp-shorter/internal/config"
+	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -141,4 +142,75 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "not found")
 	})
+}
+
+func TestAPISaveLinkHandlerFunc(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		mockService := new(MockShortLinkService)
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		link := "https://example.com"
+		ID := "abcde"
+		shortLink := model.ShortLink{ID: ID, Link: link}
+
+		mockService.On("Save", link).Return(shortLink, nil)
+
+		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":"`+link+`"}`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"result":"`+config.Conf.BaseResultAddr+"/"+ID+`"}`, rr.Body.String())
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		mockService := new(MockShortLinkService)
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Cannot decode request JSON body")
+	})
+
+	t.Run("Empty URL", func(t *testing.T) {
+		mockService := new(MockShortLinkService)
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":""}`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Empty URL")
+	})
+
+	t.Run("Service Error", func(t *testing.T) {
+		mockService := new(MockShortLinkService)
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		link := "https://example.com"
+		mockService.On("Save", link).Return(model.ShortLink{}, errors.New("internal error"))
+
+		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":"`+link+`"}`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "internal error")
+		mockService.AssertExpectations(t)
+	})
+}
+
+func init() {
+	// I don't want to do anything with logger singletone
+	logger.InitLogger("error")
 }
