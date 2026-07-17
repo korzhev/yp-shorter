@@ -43,7 +43,10 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 }
 
 func (c *compressWriter) Close() error {
-	return c.zw.Close()
+	if c.shouldCompress() {
+		return c.zw.Close()
+	}
+	return nil
 }
 
 func (c *compressWriter) shouldCompress() bool {

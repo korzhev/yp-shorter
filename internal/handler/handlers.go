@@ -35,6 +35,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
 	w.Write([]byte(l))
