@@ -25,6 +25,7 @@ func RootRouter(c config.Config) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.NewLoggerMiddleware(logger.Log))
+	r.Use(middleware.NewCompressorMiddleware())
 	// r.Use(middleware.Logger)
 	r.Use(chiMW.RedirectSlashes)
 	r.Use(chiMW.Recoverer)
