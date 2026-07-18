@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"os"
 
 	"log"
 
@@ -16,17 +17,24 @@ type Config struct {
 	BaseResultAddr   string `env:"BASE_URL"`
 	ShortLinkCharset string `env:"SH_CHARSET"`
 	LogLevel         string `env:"LOG_LEVEL"`
+	FileStoragePath  string `env:"FILE_STORAGE_PATH"`
 }
 
 var Conf Config
 
 // test framework conflicts with init()
 func ParseFlags() {
+	dir, e := os.Getwd()
+	if e != nil {
+		log.Fatal(e)
+	}
 	flag.StringVar(&Conf.ShortLinkCharset, "c", DefaultCharset, "chars to use in id generator")
 	flag.StringVar(&Conf.RunAddr, "a", ":8080", "address and port to run server")
 	flag.StringVar(&Conf.BaseResultAddr, "b", "http://localhost:8080", "base url for short link")
 	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length")
 	flag.StringVar(&Conf.LogLevel, "ll", "info", "log level")
+	flag.StringVar(&Conf.FileStoragePath, "f", dir+"/storage.json", "file storage path")
+
 	flag.Parse()
 
 	err := env.Parse(&Conf)

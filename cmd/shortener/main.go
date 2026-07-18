@@ -46,6 +46,7 @@ func main() {
 		"baseUrl", config.Conf.BaseResultAddr,
 		"shortlinkLength", config.Conf.ShortLinkLength,
 		"charsetLength", len(config.Conf.ShortLinkCharset),
+		"FileStoragePath", config.Conf.FileStoragePath,
 	)
 
 	err := http.ListenAndServe(config.Conf.RunAddr, RootRouter(config.Conf))
