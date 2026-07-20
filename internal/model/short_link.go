@@ -1,6 +1,7 @@
 package model
 
 import (
+	"os"
 	"sync"
 )
 
@@ -12,6 +13,7 @@ type ShortLink struct {
 type ShortLinkStorage struct {
 	sync.RWMutex
 	M map[string]ShortLink
+	F *os.File
 }
 
 type IShortLinkRepository interface {
