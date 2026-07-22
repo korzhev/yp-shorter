@@ -19,13 +19,13 @@ func TestNewShortLinkDB(t *testing.T) {
 
 		db := NewShortLinkDB(filePath)
 		require.NotNil(t, db)
-		require.NotNil(t, db.GetFile())
+		require.NotNil(t, db.storage.F)
 		t.Cleanup(func() {
-			require.NoError(t, db.GetFile().Close())
+			require.NoError(t, db.CloseFile())
 		})
 
 		assert.Empty(t, db.storage.M)
-		assert.Equal(t, filePath, db.GetFile().Name())
+		assert.Equal(t, filePath, db.storage.F.Name())
 
 		info, err := os.Stat(filePath)
 		require.NoError(t, err)
@@ -51,13 +51,13 @@ func TestNewShortLinkDB(t *testing.T) {
 
 		db := NewShortLinkDB(filePath)
 		require.NotNil(t, db)
-		require.NotNil(t, db.GetFile())
+		require.NotNil(t, db.storage.F)
 		t.Cleanup(func() {
-			require.NoError(t, db.GetFile().Close())
+			require.NoError(t, db.CloseFile())
 		})
 
 		assert.Equal(t, expected, db.storage.M)
-		assert.Equal(t, filePath, db.GetFile().Name())
+		assert.Equal(t, filePath, db.storage.F.Name())
 
 		for id, expectedLink := range expected {
 			actualLink, err := db.GetById(id)

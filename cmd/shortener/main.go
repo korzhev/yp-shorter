@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/handler"
@@ -15,10 +14,7 @@ import (
 	chiMW "github.com/go-chi/chi/v5/middleware"
 )
 
-var storageFile *os.File
-
-func RootRouter(c config.Config) chi.Router {
-	db := repository.NewShortLinkDB(c.FileStoragePath)
+func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 	var ShortLinkHandle = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
@@ -26,7 +22,7 @@ func RootRouter(c config.Config) chi.Router {
 			ShortLinkDB: db,
 		},
 	}
-	storageFile = db.GetFile()
+	// storageFile = db.GetFile()
 	r := chi.NewRouter()
 
 	r.Use(middleware.NewLoggerMiddleware(logger.Log))
@@ -53,8 +49,10 @@ func main() {
 		"charsetLength", len(config.Conf.ShortLinkCharset),
 		"FileStoragePath", config.Conf.FileStoragePath,
 	)
-	r := RootRouter(config.Conf)
-	defer storageFile.Close()
+
+	db := repository.NewShortLinkDB(config.Conf.FileStoragePath)
+	r := RootRouter(config.Conf, db)
+	defer db.CloseFile()
 	err := http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)

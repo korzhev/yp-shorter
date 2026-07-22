@@ -52,8 +52,8 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	return sl, nil
 }
 
-func (s *ShortLinkDB) GetFile() *os.File {
-	return s.storage.F
+func (s *ShortLinkDB) CloseFile() error {
+	return s.storage.F.Close()
 }
 
 func NewShortLinkDB(filePath string) *ShortLinkDB {
