@@ -22,12 +22,11 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 			ShortLinkDB: db,
 		},
 	}
-	// storageFile = db.GetFile()
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.NewLoggerMiddleware(logger.Log))
 	r.Use(middleware.NewCompressorMiddleware())
-	// r.Use(middleware.Logger)
 	r.Use(chiMW.RedirectSlashes)
 	r.Use(chiMW.Recoverer)
 
@@ -51,8 +50,9 @@ func main() {
 	)
 
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath)
-	r := RootRouter(config.Conf, db)
 	defer db.CloseFile()
+
+	r := RootRouter(config.Conf, db)
 	err := http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
