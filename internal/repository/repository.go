@@ -48,7 +48,10 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	if _, err := s.storage.F.Seek(0, io.SeekStart); err != nil {
 		return sl, fmt.Errorf("Can't set cursor:  %s, %s", s.storage.F.Name(), err.Error())
 	}
-	s.storage.F.Write(b)
+	if _, err := s.storage.F.Write(b); err != nil {
+		return sl, fmt.Errorf("Can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
+	}
+
 	return sl, nil
 }
 

@@ -25,3 +25,4 @@ vendor/
 yptests/
 shortenertest
 cmd/shortener/*.json
+*.html

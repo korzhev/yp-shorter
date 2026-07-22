@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-type ComressorMiddleware func(next http.Handler) http.Handler
+type CompressorMiddleware func(next http.Handler) http.Handler
 
 // compressWriter implements http.ResponseWriter
 type compressWriter struct {
@@ -82,7 +82,7 @@ func (c *compressReader) Close() error {
 	return c.gr.Close()
 }
 
-func NewCompressorMiddleware() ComressorMiddleware {
+func NewCompressorMiddleware() CompressorMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ww := w

@@ -27,9 +27,6 @@ func NewLoggerMiddleware(sugar *zap.SugaredLogger) LoggerMiddleware {
 				rLogger.Infow("Req-Res")
 			}()
 
-			// Probably context will be needed in the future
-			// ctx := context.WithValue(r.Context(), "modified", true)
-			// next.ServeHTTP(w, r.WithContext(ctx))
 			next.ServeHTTP(ww, r)
 		})
 	}
