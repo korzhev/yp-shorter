@@ -26,3 +26,4 @@ yptests/
 shortenertest
 cmd/shortener/*.json
 *.html
+.env

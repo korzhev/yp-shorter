@@ -44,6 +44,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, 6, Conf.ShortLinkLength)
 		assert.Equal(t, "info", Conf.LogLevel)
 		assert.Equal(t, dir+"/storage.json", Conf.FileStoragePath)
+		assert.Empty(t, Conf.DBDSN)
 	})
 
 	t.Run("uses flag values", func(t *testing.T) {
@@ -55,6 +56,7 @@ func TestParseFlags(t *testing.T) {
 			"-l", "10",
 			"-ll", "debug",
 			"-f", "/tmp/flag-storage.json",
+			"-d", "postgres://flag-user:flag-pass@localhost:5432/flag-db",
 		}, nil)
 
 		ParseFlags()
@@ -65,6 +67,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, 10, Conf.ShortLinkLength)
 		assert.Equal(t, "debug", Conf.LogLevel)
 		assert.Equal(t, "/tmp/flag-storage.json", Conf.FileStoragePath)
+		assert.Equal(t, "postgres://flag-user:flag-pass@localhost:5432/flag-db", Conf.DBDSN)
 	})
 
 	t.Run("environment variables override flag values", func(t *testing.T) {
@@ -76,13 +79,15 @@ func TestParseFlags(t *testing.T) {
 			"-l", "10",
 			"-ll", "debug",
 			"-f", "/tmp/flag-storage.json",
+			"-d", "postgres://flag-user:flag-pass@localhost:5432/flag-db",
 		}, map[string]string{
-			"SH_CHARSET":         "xyz",
-			"SERVER_ADDRESS":     ":7070",
-			"BASE_URL":           "https://env.example.com",
-			"SH_LENGTH":          "12",
-			"LOG_LEVEL":          "warn",
+			"SH_CHARSET":        "xyz",
+			"SERVER_ADDRESS":    ":7070",
+			"BASE_URL":          "https://env.example.com",
+			"SH_LENGTH":         "12",
+			"LOG_LEVEL":         "warn",
 			"FILE_STORAGE_PATH": "/tmp/env-storage.json",
+			"DATABASE_DSN":      "postgres://env-user:env-pass@localhost:5432/env-db",
 		})
 
 		ParseFlags()
@@ -93,6 +98,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, 12, Conf.ShortLinkLength)
 		assert.Equal(t, "warn", Conf.LogLevel)
 		assert.Equal(t, "/tmp/env-storage.json", Conf.FileStoragePath)
+		assert.Equal(t, "postgres://env-user:env-pass@localhost:5432/env-db", Conf.DBDSN)
 	})
 
 }

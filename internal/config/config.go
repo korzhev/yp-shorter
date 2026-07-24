@@ -18,6 +18,7 @@ type Config struct {
 	ShortLinkCharset string `env:"SH_CHARSET"`
 	LogLevel         string `env:"LOG_LEVEL"`
 	FileStoragePath  string `env:"FILE_STORAGE_PATH"`
+	DBDSN            string `env:"DATABASE_DSN"`
 }
 
 var Conf Config
@@ -34,6 +35,7 @@ func ParseFlags() {
 	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length")
 	flag.StringVar(&Conf.LogLevel, "ll", "info", "log level")
 	flag.StringVar(&Conf.FileStoragePath, "f", dir+"/storage.json", "file storage path")
+	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string")
 
 	flag.Parse()
 
