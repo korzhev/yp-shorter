@@ -9,7 +9,7 @@ import (
 
 	"github.com/korzhev/yp-shorter/internal/handler"
 	"github.com/korzhev/yp-shorter/internal/logger"
-	"github.com/korzhev/yp-shorter/internal/mocks"
+	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"

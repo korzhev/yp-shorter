@@ -6,7 +6,7 @@ type ShortLink struct {
 }
 
 type IShortLinkRepository interface {
-	GetById(id string) (ShortLink, error)
+	GetByShort(short string) (ShortLink, error)
 	Save(id string, link string) (ShortLink, error)
 	Close() error
 }

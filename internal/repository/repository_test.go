@@ -61,7 +61,7 @@ func TestNewShortLinkDB(t *testing.T) {
 		assert.Equal(t, filePath, db.storage.F.Name())
 
 		for id, expectedLink := range expected {
-			actualLink, err := db.GetById(id)
+			actualLink, err := db.GetByShort(id)
 			require.NoError(t, err)
 			assert.Equal(t, expectedLink, actualLink)
 		}
@@ -81,14 +81,14 @@ func TestShortLinkDB_GetById(t *testing.T) {
 	db.storage.M[id] = sl
 
 	t.Run("Success", func(t *testing.T) {
-		result, err := db.GetById(id)
+		result, err := db.GetByShort(id)
 		assert.NoError(t, err)
 		assert.Equal(t, sl, result)
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
 		id := "non-existent"
-		result, err := db.GetById(id)
+		result, err := db.GetByShort(id)
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), fmt.Sprintf("No short link with ID: %s", id))
 		assert.Empty(t, result.ID)
@@ -109,7 +109,7 @@ func TestShortLinkDB_Save(t *testing.T) {
 	db := &ShortLinkDB{storage: ShortLinkStorage{
 		M: make(InMemoryStorage),
 		F: file,
-	}}
+	}, storageType: config.File}
 
 	id := "new-id"
 	link := "https://new-link.com"

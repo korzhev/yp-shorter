@@ -12,7 +12,7 @@ var IDSourceRand = rand.New(source)
 
 type IShortLinkService interface {
 	GenerateID() string
-	GetById(id string) (model.ShortLink, error)
+	GetByShort(id string) (model.ShortLink, error)
 	Save(link string) (model.ShortLink, error)
 }
 
@@ -30,8 +30,8 @@ func (s ShortLinkService) GenerateID() string {
 	return string(b)
 }
 
-func (s ShortLinkService) GetById(id string) (model.ShortLink, error) {
-	return s.ShortLinkDB.GetById(id)
+func (s ShortLinkService) GetByShort(id string) (model.ShortLink, error) {
+	return s.ShortLinkDB.GetByShort(id)
 }
 
 func (s ShortLinkService) Save(link string) (model.ShortLink, error) {

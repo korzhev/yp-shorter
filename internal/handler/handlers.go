@@ -47,7 +47,7 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty ID", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.GetById(id)
+	sl, err := s.ShortLinkService.GetByShort(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

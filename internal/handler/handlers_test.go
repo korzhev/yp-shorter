@@ -25,7 +25,7 @@ func (m *MockShortLinkService) GenerateID() string {
 	return args.String(0)
 }
 
-func (m *MockShortLinkService) GetById(id string) (model.ShortLink, error) {
+func (m *MockShortLinkService) GetByShort(id string) (model.ShortLink, error) {
 	args := m.Called(id)
 	return args.Get(0).(model.ShortLink), args.Error(1)
 }
@@ -97,7 +97,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		link := "https://example.com"
 		shortLink := model.ShortLink{ID: id, Link: link}
 
-		mockService.On("GetById", id).Return(shortLink, nil)
+		mockService.On("GetByShort", id).Return(shortLink, nil)
 
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
 		id := "nonexistent"
-		mockService.On("GetById", id).Return(model.ShortLink{}, errors.New("not found"))
+		mockService.On("GetByShort", id).Return(model.ShortLink{}, errors.New("not found"))
 
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()

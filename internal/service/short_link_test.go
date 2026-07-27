@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/korzhev/yp-shorter/internal/mocks"
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -38,9 +38,9 @@ func TestGetById(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := ShortLinkService{ShortLinkDB: mockRepo}
-		mockRepo.EXPECT().GetById(expectedID).Return(expectedShortLink, nil)
+		mockRepo.EXPECT().GetByShort(expectedID).Return(expectedShortLink, nil)
 
-		res, err := service.GetById(expectedID)
+		res, err := service.GetByShort(expectedID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, expectedShortLink, res)
@@ -50,9 +50,9 @@ func TestGetById(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := ShortLinkService{ShortLinkDB: mockRepo}
 		expectedErr := errors.New("not found")
-		mockRepo.EXPECT().GetById("nonexistent").Return(model.ShortLink{}, expectedErr)
+		mockRepo.EXPECT().GetByShort("nonexistent").Return(model.ShortLink{}, expectedErr)
 
-		res, err := service.GetById("nonexistent")
+		res, err := service.GetByShort("nonexistent")
 
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)

@@ -24,8 +24,8 @@ func InitSchema(dsn string) error {
 	}
 
 	defer m.Close()
-
-	if err := m.Up(); err != nil {
+	// migrate.ErrNoChange - fires if there isn't any new migration to run
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return err
 	}
 

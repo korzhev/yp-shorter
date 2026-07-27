@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -29,18 +30,50 @@ type ShortLinkDB struct {
 	DB          *sql.DB
 }
 
-func (s *ShortLinkDB) GetById(id string) (model.ShortLink, error) {
+func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error) {
 	s.storage.RLock()
-	sl, ok := s.storage.M[id]
+	sl, ok := s.storage.M[short]
 	defer s.storage.RUnlock()
 	if !ok {
-		return sl, fmt.Errorf("No short link with ID: %s", id)
+		return sl, fmt.Errorf("No short link with ID: %s", short)
 	}
 
 	return sl, nil
 }
 
-func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
+func (s *ShortLinkDB) getByShortFromDB(short string) (model.ShortLink, error) {
+	ctx := context.Background()
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE short = $1 LIMIT 1", short)
+	sl := model.ShortLink{ID: short}
+	err := row.Scan(&sl.ID, &sl.Link)
+	return sl, err
+}
+
+func (s *ShortLinkDB) GetByShort(short string) (model.ShortLink, error) {
+	var sl model.ShortLink
+	var err error
+	switch s.storageType {
+	case config.Database:
+		sl, err = s.getByShortFromDB(short)
+	default:
+		// File also as InMemory uses memory to get ShortLink
+		sl, err = s.getByShortFromMemory(short)
+	}
+
+	return sl, err
+}
+
+func (s *ShortLinkDB) saveDatabase(short, link string) (model.ShortLink, error) {
+	ctx := context.Background()
+	sl := model.ShortLink{ID: short, Link: link}
+	_, err := s.DB.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", short, link)
+	if err != nil {
+		return sl, err
+	}
+	return sl, nil
+}
+
+func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
 	s.storage.Lock()
 	sl := model.ShortLink{ID: id, Link: link}
 	defer s.storage.Unlock()
@@ -52,9 +85,18 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 		return sl, fmt.Errorf("ID: %s is already used", id)
 	}
 	s.storage.M[id] = sl
+	return sl, nil
+}
+
+func (s *ShortLinkDB) saveFile(id, link string) (model.ShortLink, error) {
+	sl, err := s.saveInMemory(id, link)
+	if err != nil {
+		return sl, err
+	}
+
 	b, err := json.Marshal(s.storage.M)
 	if err != nil {
-		return sl, fmt.Errorf("Can't marshal data: %v wit error: %s", s.storage.M, err.Error())
+		return sl, fmt.Errorf("Can't marshal data: %v with error: %s", s.storage.M, err.Error())
 	}
 	if err := s.storage.F.Truncate(0); err != nil {
 		return sl, fmt.Errorf("Can't clean storage: %s, %s", s.storage.F.Name(), err.Error())
@@ -66,8 +108,22 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	if _, err := s.storage.F.Write(b); err != nil {
 		return sl, fmt.Errorf("Can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
 	}
-
 	return sl, nil
+}
+
+func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
+	var sl model.ShortLink
+	var err error
+	switch s.storageType {
+	case config.File:
+		sl, err = s.saveFile(id, link)
+	case config.Database:
+		sl, err = s.saveDatabase(id, link)
+	default:
+		sl, err = s.saveInMemory(id, link)
+	}
+
+	return sl, err
 }
 
 func (s *ShortLinkDB) Close() error {
