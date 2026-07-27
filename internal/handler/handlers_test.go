@@ -11,40 +11,21 @@ import (
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"go.uber.org/mock/gomock"
 )
-
-// MockShortLinkService is a mock implementation of IShortLinkService
-type MockShortLinkService struct {
-	mock.Mock
-}
-
-func (m *MockShortLinkService) GenerateID() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockShortLinkService) GetByShort(id string) (model.ShortLink, error) {
-	args := m.Called(id)
-	return args.Get(0).(model.ShortLink), args.Error(1)
-}
-
-func (m *MockShortLinkService) Save(link string) (model.ShortLink, error) {
-	args := m.Called(link)
-	return args.Get(0).(model.ShortLink), args.Error(1)
-}
 
 func TestSaveLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		ID := "abcde"
 		shortLink := model.ShortLink{ID: ID, Link: link}
 
-		mockService.On("Save", link).Return(shortLink, nil)
+		mockService.EXPECT().Save(link).Return(shortLink, nil)
 
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(link))
 		rr := httptest.NewRecorder()
@@ -53,11 +34,10 @@ func TestSaveLinkHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		assert.Contains(t, rr.Body.String(), config.Conf.BaseResultAddr+"/"+ID)
-		mockService.AssertExpectations(t)
 	})
 
 	t.Run("Empty Body", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(""))
@@ -70,11 +50,11 @@ func TestSaveLinkHandler(t *testing.T) {
 	})
 
 	t.Run("Service Error", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
-		mockService.On("Save", link).Return(model.ShortLink{}, errors.New("internal error"))
+		mockService.EXPECT().Save(link).Return(model.ShortLink{}, errors.New("internal error"))
 
 		req, _ := http.NewRequest("POST", "/", bytes.NewBufferString(link))
 		rr := httptest.NewRecorder()
@@ -88,7 +68,7 @@ func TestSaveLinkHandler(t *testing.T) {
 
 func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
@@ -97,7 +77,7 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		link := "https://example.com"
 		shortLink := model.ShortLink{ID: id, Link: link}
 
-		mockService.On("GetByShort", id).Return(shortLink, nil)
+		mockService.EXPECT().GetByShort(id).Return(shortLink, nil)
 
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
@@ -106,11 +86,10 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusTemporaryRedirect, rr.Code)
 		assert.Equal(t, link, rr.Header().Get("Location"))
-		mockService.AssertExpectations(t)
 	})
 
 	t.Run("Empty ID", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		// To test the "Empty ID" logic, we need a route that matches but results in an empty 'id' parameter
@@ -126,13 +105,13 @@ func TestGetByIDLinkHandler(t *testing.T) {
 	})
 
 	t.Run("Service Error", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 		r := chi.NewRouter()
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
 		id := "nonexistent"
-		mockService.On("GetByShort", id).Return(model.ShortLink{}, errors.New("not found"))
+		mockService.EXPECT().GetByShort(id).Return(model.ShortLink{}, errors.New("not found"))
 
 		req, _ := http.NewRequest("GET", "/"+id, nil)
 		rr := httptest.NewRecorder()
@@ -146,14 +125,14 @@ func TestGetByIDLinkHandler(t *testing.T) {
 
 func TestAPISaveLinkHandlerFunc(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
 		ID := "abcde"
 		shortLink := model.ShortLink{ID: ID, Link: link}
 
-		mockService.On("Save", link).Return(shortLink, nil)
+		mockService.EXPECT().Save(link).Return(shortLink, nil)
 
 		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":"`+link+`"}`))
 		rr := httptest.NewRecorder()
@@ -163,11 +142,10 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 		assert.JSONEq(t, `{"result":"`+config.Conf.BaseResultAddr+"/"+ID+`"}`, rr.Body.String())
-		mockService.AssertExpectations(t)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":`))
@@ -180,7 +158,7 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 	})
 
 	t.Run("Empty URL", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":""}`))
@@ -193,11 +171,11 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 	})
 
 	t.Run("Service Error", func(t *testing.T) {
-		mockService := new(MockShortLinkService)
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 
 		link := "https://example.com"
-		mockService.On("Save", link).Return(model.ShortLink{}, errors.New("internal error"))
+		mockService.EXPECT().Save(link).Return(model.ShortLink{}, errors.New("internal error"))
 
 		req, _ := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(`{"url":"`+link+`"}`))
 		rr := httptest.NewRecorder()
@@ -206,7 +184,6 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "internal error")
-		mockService.AssertExpectations(t)
 	})
 }
 
