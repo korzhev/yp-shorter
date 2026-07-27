@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,11 +18,11 @@ func TestNewShortLinkDB(t *testing.T) {
 	t.Run("CreatesNewStorageFile", func(t *testing.T) {
 		filePath := filepath.Join(t.TempDir(), "storage.json")
 
-		db := NewShortLinkDB(filePath)
+		db := NewShortLinkDB(filePath, "", config.File)
 		require.NotNil(t, db)
 		require.NotNil(t, db.storage.F)
 		t.Cleanup(func() {
-			require.NoError(t, db.CloseFile())
+			require.NoError(t, db.Close())
 		})
 
 		assert.Empty(t, db.storage.M)
@@ -34,7 +35,7 @@ func TestNewShortLinkDB(t *testing.T) {
 
 	t.Run("LoadsExistingStorageFile", func(t *testing.T) {
 		filePath := filepath.Join(t.TempDir(), "storage.json")
-		expected := map[string]model.ShortLink{
+		expected := InMemoryStorage{
 			"first-id": {
 				ID:   "first-id",
 				Link: "https://example.com/first",
@@ -49,11 +50,11 @@ func TestNewShortLinkDB(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filePath, data, 0644))
 
-		db := NewShortLinkDB(filePath)
+		db := NewShortLinkDB(filePath, "", config.File)
 		require.NotNil(t, db)
 		require.NotNil(t, db.storage.F)
 		t.Cleanup(func() {
-			require.NoError(t, db.CloseFile())
+			require.NoError(t, db.Close())
 		})
 
 		assert.Equal(t, expected, db.storage.M)
@@ -68,8 +69,8 @@ func TestNewShortLinkDB(t *testing.T) {
 }
 
 func TestShortLinkDB_GetById(t *testing.T) {
-	db := &ShortLinkDB{storage: model.ShortLinkStorage{
-		M: make(map[string]model.ShortLink),
+	db := &ShortLinkDB{storage: ShortLinkStorage{
+		M: make(InMemoryStorage),
 	}}
 
 	id := "test-id"
@@ -105,8 +106,8 @@ func TestShortLinkDB_Save(t *testing.T) {
 		assert.NoError(t, file.Close())
 	})
 
-	db := &ShortLinkDB{storage: model.ShortLinkStorage{
-		M: make(map[string]model.ShortLink),
+	db := &ShortLinkDB{storage: ShortLinkStorage{
+		M: make(InMemoryStorage),
 		F: file,
 	}}
 
@@ -130,7 +131,7 @@ func TestShortLinkDB_Save(t *testing.T) {
 		data, err := io.ReadAll(file)
 		assert.NoError(t, err)
 
-		var persisted map[string]model.ShortLink
+		var persisted InMemoryStorage
 		assert.NoError(t, json.Unmarshal(data, &persisted))
 		assert.Equal(t, db.storage.M, persisted)
 	})

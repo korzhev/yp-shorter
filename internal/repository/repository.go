@@ -1,17 +1,32 @@
 package repository
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"sync"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/model"
 )
 
+type InMemoryStorage map[string]model.ShortLink
+
+type ShortLinkStorage struct {
+	sync.RWMutex
+	M InMemoryStorage
+	F *os.File
+}
+
 type ShortLinkDB struct {
-	storage model.ShortLinkStorage
+	storage     ShortLinkStorage
+	storageType config.StorageType
+	DB          *sql.DB
 }
 
 func (s *ShortLinkDB) GetById(id string) (model.ShortLink, error) {
@@ -55,13 +70,18 @@ func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
 	return sl, nil
 }
 
-func (s *ShortLinkDB) CloseFile() error {
-	return s.storage.F.Close()
+func (s *ShortLinkDB) Close() error {
+	switch s.storageType {
+	case config.File:
+		return s.storage.F.Close()
+	case config.Database:
+		return s.DB.Close()
+	default:
+		return nil
+	}
 }
 
-func NewShortLinkDB(filePath string) *ShortLinkDB {
-
-	m := make(map[string]model.ShortLink)
+func initFile(filePath string, m InMemoryStorage) *os.File {
 	// not sure about O_SYNC
 	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
@@ -71,18 +91,41 @@ func NewShortLinkDB(filePath string) *ShortLinkDB {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	// check if just created
 	if len(data) != 0 {
 		if err := json.Unmarshal(data, &m); err != nil {
 			log.Fatal(err)
 		}
 	}
+	return file
+}
+
+func initDB(dsn string) *sql.DB {
+	pg, err := sql.Open("pgx", dsn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return pg
+}
+
+func NewShortLinkDB(filePath string, dsn string, st config.StorageType) *ShortLinkDB {
+	var file *os.File
+	var pg *sql.DB
+	m := make(InMemoryStorage)
+
+	switch st {
+	case config.File:
+		file = initFile(filePath, m)
+	case config.Database:
+		pg = initDB(dsn)
+	}
 
 	return &ShortLinkDB{
-		storage: model.ShortLinkStorage{
+		storage: ShortLinkStorage{
 			M: m,
 			F: file,
 		},
+		DB:          pg,
+		storageType: st,
 	}
 }

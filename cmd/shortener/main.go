@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"net/http"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -17,7 +16,7 @@ import (
 	chiMW "github.com/go-chi/chi/v5/middleware"
 )
 
-func RootRouter(c config.Config, db *repository.ShortLinkDB, pg *sql.DB) chi.Router {
+func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
@@ -26,7 +25,7 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, pg *sql.DB) chi.Rou
 		},
 	}
 	var PingHandler = handler.PingHandler{
-		Pg: pg,
+		Pg: db.DB,
 	}
 
 	r := chi.NewRouter()
@@ -56,17 +55,11 @@ func main() {
 		"FileStoragePath", config.Conf.FileStoragePath,
 	)
 
-	db := repository.NewShortLinkDB(config.Conf.FileStoragePath)
-	defer db.CloseFile()
+	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
+	defer db.Close()
 
-	pg, err := sql.Open("pgx", config.Conf.DBDSN)
-	if err != nil {
-		logger.Log.Errorf("Error connecting DB: %s\n", err)
-	}
-	defer pg.Close()
-
-	r := RootRouter(config.Conf, db, pg)
-	err = http.ListenAndServe(config.Conf.RunAddr, r)
+	r := RootRouter(config.Conf, db)
+	err := http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
 	}
