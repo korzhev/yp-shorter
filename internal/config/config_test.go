@@ -33,8 +33,6 @@ func withTestFlagsAndEnv(t *testing.T, args []string, env map[string]string) {
 func TestParseFlags(t *testing.T) {
 	t.Run("uses default values", func(t *testing.T) {
 		withTestFlagsAndEnv(t, []string{"shortener"}, nil)
-		dir, err := os.Getwd()
-		assert.NoError(t, err)
 
 		ParseFlags()
 
@@ -43,8 +41,9 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, "http://localhost:8080", Conf.BaseResultAddr)
 		assert.Equal(t, 6, Conf.ShortLinkLength)
 		assert.Equal(t, "info", Conf.LogLevel)
-		assert.Equal(t, dir+"/storage.json", Conf.FileStoragePath)
+		assert.Empty(t, Conf.FileStoragePath)
 		assert.Empty(t, Conf.DBDSN)
+		assert.Equal(t, InMemory, Conf.StorageType)
 	})
 
 	t.Run("uses flag values", func(t *testing.T) {
@@ -68,6 +67,20 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, "debug", Conf.LogLevel)
 		assert.Equal(t, "/tmp/flag-storage.json", Conf.FileStoragePath)
 		assert.Equal(t, "postgres://flag-user:flag-pass@localhost:5432/flag-db", Conf.DBDSN)
+		assert.Equal(t, Database, Conf.StorageType)
+	})
+
+	t.Run("uses file storage when database DSN is empty", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{
+			"shortener",
+			"-f", "/tmp/storage.json",
+		}, nil)
+
+		ParseFlags()
+
+		assert.Equal(t, "/tmp/storage.json", Conf.FileStoragePath)
+		assert.Empty(t, Conf.DBDSN)
+		assert.Equal(t, File, Conf.StorageType)
 	})
 
 	t.Run("environment variables override flag values", func(t *testing.T) {
@@ -99,6 +112,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, "warn", Conf.LogLevel)
 		assert.Equal(t, "/tmp/env-storage.json", Conf.FileStoragePath)
 		assert.Equal(t, "postgres://env-user:env-pass@localhost:5432/env-db", Conf.DBDSN)
+		assert.Equal(t, Database, Conf.StorageType)
 	})
 
 }
