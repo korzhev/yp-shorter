@@ -5,15 +5,15 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/go-chi/chi/v5"
+	chiMW "github.com/go-chi/chi/v5/middleware"
 	"github.com/korzhev/yp-shorter/internal/config"
+	configdb "github.com/korzhev/yp-shorter/internal/config/db"
 	"github.com/korzhev/yp-shorter/internal/handler"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
-
-	"github.com/go-chi/chi/v5"
-	chiMW "github.com/go-chi/chi/v5/middleware"
 )
 
 func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
@@ -53,7 +53,19 @@ func main() {
 		"shortlinkLength", config.Conf.ShortLinkLength,
 		"charsetLength", len(config.Conf.ShortLinkCharset),
 		"FileStoragePath", config.Conf.FileStoragePath,
+		"StorageType", config.Conf.StorageType,
 	)
+
+	if config.Conf.StorageType == config.Database {
+		if err := configdb.InitSchema(config.Conf.DBDSN); err != nil {
+			logger.Log.Fatalw(
+				"Failed to apply database migrations",
+				"error", err,
+			)
+		}
+
+		logger.Log.Info("Database schema is up to date")
+	}
 
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
 	defer db.Close()

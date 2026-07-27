@@ -39,7 +39,8 @@ func ParseFlags() {
 	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length")
 	flag.StringVar(&Conf.LogLevel, "ll", "info", "log level")
 	flag.StringVar(&Conf.FileStoragePath, "f", "", "file storage path")
-	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string")
+	// sslmode=disable for local db in docker
+	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string. format: postgres://user:pass@localhost:5432/db?sslmode=disable")
 
 	flag.Parse()
 
