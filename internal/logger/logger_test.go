@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"errors"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,7 +15,12 @@ func TestInitLogger(t *testing.T) {
 		require.NoError(t, InitLogger("debug"))
 		require.NotNil(t, Log)
 		assert.True(t, Log.Desugar().Core().Enabled(zapcore.DebugLevel))
-		require.NoError(t, Log.Sync())
+
+		// Sync calls fsync for stderr. Terminals and /dev/stderr may not support
+		// fsync and return EINVAL even though logging itself works correctly.
+		if err := Log.Sync(); err != nil {
+			require.True(t, errors.Is(err, syscall.EINVAL), "unexpected sync error: %v", err)
+		}
 	})
 
 	t.Run("returns error for invalid level", func(t *testing.T) {
