@@ -1,13 +1,15 @@
 package model
 
+import "context"
+
 type ShortLink struct {
 	ID   string
 	Link string
 }
 
 type IShortLinkRepository interface {
-	GetByShort(short string) (ShortLink, error)
-	Save(id string, link string) (ShortLink, error)
+	GetByShort(ctx context.Context, short string) (ShortLink, error)
+	Save(ctx context.Context, id string, link string) (ShortLink, error)
 	Close() error
 }
 

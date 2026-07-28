@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -28,6 +29,7 @@ func TestGenerateID(t *testing.T) {
 }
 
 func TestGetById(t *testing.T) {
+	ctx := context.Background()
 	expectedID := "abc123"
 	expectedLink := "https://example.com"
 	expectedShortLink := model.ShortLink{
@@ -38,9 +40,9 @@ func TestGetById(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := ShortLinkService{ShortLinkDB: mockRepo}
-		mockRepo.EXPECT().GetByShort(expectedID).Return(expectedShortLink, nil)
+		mockRepo.EXPECT().GetByShort(ctx, expectedID).Return(expectedShortLink, nil)
 
-		res, err := service.GetByShort(expectedID)
+		res, err := service.GetByShort(ctx, expectedID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, expectedShortLink, res)
@@ -50,9 +52,9 @@ func TestGetById(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := ShortLinkService{ShortLinkDB: mockRepo}
 		expectedErr := errors.New("not found")
-		mockRepo.EXPECT().GetByShort("nonexistent").Return(model.ShortLink{}, expectedErr)
+		mockRepo.EXPECT().GetByShort(ctx, "nonexistent").Return(model.ShortLink{}, expectedErr)
 
-		res, err := service.GetByShort("nonexistent")
+		res, err := service.GetByShort(ctx, "nonexistent")
 
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
@@ -61,6 +63,7 @@ func TestGetById(t *testing.T) {
 }
 
 func TestSave(t *testing.T) {
+	ctx := context.Background()
 	const charset = "abc"
 	const idLength = 3
 	testLink := "https://example.com"
@@ -86,10 +89,10 @@ func TestSave(t *testing.T) {
 	t.Run("Success on first attempt", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		mockRepo.EXPECT().Save(idMatcher, testLink).
+		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 			Return(model.ShortLink{ID: "abc", Link: testLink}, nil)
 
-		res, err := service.Save(testLink)
+		res, err := service.Save(ctx, testLink)
 
 		assert.NoError(t, err)
 		assert.Equal(t, testLink, res.Link)
@@ -99,13 +102,13 @@ func TestSave(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		gomock.InOrder(
-			mockRepo.EXPECT().Save(idMatcher, testLink).
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 				Return(model.ShortLink{}, errors.New("collision")),
-			mockRepo.EXPECT().Save(idMatcher, testLink).
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 				Return(model.ShortLink{ID: "abc", Link: testLink}, nil),
 		)
 
-		res, err := service.Save(testLink)
+		res, err := service.Save(ctx, testLink)
 
 		assert.NoError(t, err)
 		assert.Equal(t, testLink, res.Link)
@@ -115,10 +118,10 @@ func TestSave(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		expectedErr := errors.New("persistent error")
-		mockRepo.EXPECT().Save(idMatcher, testLink).
+		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 			Return(model.ShortLink{}, expectedErr).Times(11)
 
-		res, err := service.Save(testLink)
+		res, err := service.Save(ctx, testLink)
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Equal(t, model.ShortLink{}, res)

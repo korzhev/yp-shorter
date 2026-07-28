@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	model "github.com/korzhev/yp-shorter/internal/model"
@@ -55,31 +56,31 @@ func (mr *MockIShortLinkRepositoryMockRecorder) Close() *gomock.Call {
 }
 
 // GetByShort mocks base method.
-func (m *MockIShortLinkRepository) GetByShort(short string) (model.ShortLink, error) {
+func (m *MockIShortLinkRepository) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByShort", short)
+	ret := m.ctrl.Call(m, "GetByShort", ctx, short)
 	ret0, _ := ret[0].(model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetByShort indicates an expected call of GetByShort.
-func (mr *MockIShortLinkRepositoryMockRecorder) GetByShort(short any) *gomock.Call {
+func (mr *MockIShortLinkRepositoryMockRecorder) GetByShort(ctx, short any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByShort", reflect.TypeOf((*MockIShortLinkRepository)(nil).GetByShort), short)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByShort", reflect.TypeOf((*MockIShortLinkRepository)(nil).GetByShort), ctx, short)
 }
 
 // Save mocks base method.
-func (m *MockIShortLinkRepository) Save(id, link string) (model.ShortLink, error) {
+func (m *MockIShortLinkRepository) Save(ctx context.Context, id, link string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Save", id, link)
+	ret := m.ctrl.Call(m, "Save", ctx, id, link)
 	ret0, _ := ret[0].(model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Save indicates an expected call of Save.
-func (mr *MockIShortLinkRepositoryMockRecorder) Save(id, link any) *gomock.Call {
+func (mr *MockIShortLinkRepositoryMockRecorder) Save(ctx, id, link any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkRepository)(nil).Save), id, link)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkRepository)(nil).Save), ctx, id, link)
 }

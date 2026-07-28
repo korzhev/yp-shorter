@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	model "github.com/korzhev/yp-shorter/internal/model"
@@ -55,31 +56,31 @@ func (mr *MockIShortLinkServiceMockRecorder) GenerateID() *gomock.Call {
 }
 
 // GetByShort mocks base method.
-func (m *MockIShortLinkService) GetByShort(id string) (model.ShortLink, error) {
+func (m *MockIShortLinkService) GetByShort(ctx context.Context, id string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByShort", id)
+	ret := m.ctrl.Call(m, "GetByShort", ctx, id)
 	ret0, _ := ret[0].(model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetByShort indicates an expected call of GetByShort.
-func (mr *MockIShortLinkServiceMockRecorder) GetByShort(id any) *gomock.Call {
+func (mr *MockIShortLinkServiceMockRecorder) GetByShort(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByShort", reflect.TypeOf((*MockIShortLinkService)(nil).GetByShort), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByShort", reflect.TypeOf((*MockIShortLinkService)(nil).GetByShort), ctx, id)
 }
 
 // Save mocks base method.
-func (m *MockIShortLinkService) Save(link string) (model.ShortLink, error) {
+func (m *MockIShortLinkService) Save(ctx context.Context, link string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Save", link)
+	ret := m.ctrl.Call(m, "Save", ctx, link)
 	ret0, _ := ret[0].(model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Save indicates an expected call of Save.
-func (mr *MockIShortLinkServiceMockRecorder) Save(link any) *gomock.Call {
+func (mr *MockIShortLinkServiceMockRecorder) Save(ctx, link any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkService)(nil).Save), link)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkService)(nil).Save), ctx, link)
 }

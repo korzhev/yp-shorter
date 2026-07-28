@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"math/rand"
 	"time"
 
@@ -12,8 +13,8 @@ var IDSourceRand = rand.New(source)
 
 type IShortLinkService interface {
 	GenerateID() string
-	GetByShort(id string) (model.ShortLink, error)
-	Save(link string) (model.ShortLink, error)
+	GetByShort(ctx context.Context, id string) (model.ShortLink, error)
+	Save(ctx context.Context, link string) (model.ShortLink, error)
 }
 
 type ShortLinkService struct {
@@ -30,20 +31,20 @@ func (s ShortLinkService) GenerateID() string {
 	return string(b)
 }
 
-func (s ShortLinkService) GetByShort(id string) (model.ShortLink, error) {
-	return s.ShortLinkDB.GetByShort(id)
+func (s ShortLinkService) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
+	return s.ShortLinkDB.GetByShort(ctx, short)
 }
 
-func (s ShortLinkService) Save(link string) (model.ShortLink, error) {
-	var id = s.GenerateID()
+func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLink, error) {
+	var short = s.GenerateID()
 
-	var sl, err = s.ShortLinkDB.Save(id, link)
+	var sl, err = s.ShortLinkDB.Save(ctx, short, link)
 	i := 0
 
 	for i < 10 && err != nil {
 		// retry up to 10 times to save if id is not unique
-		id = s.GenerateID()
-		sl, err = s.ShortLinkDB.Save(id, link)
+		short = s.GenerateID()
+		sl, err = s.ShortLinkDB.Save(ctx, short, link)
 		i++
 	}
 	return sl, err

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 )
 
 func TestNewShortLinkDB(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("CreatesNewStorageFile", func(t *testing.T) {
 		filePath := filepath.Join(t.TempDir(), "storage.json")
 
@@ -63,7 +66,7 @@ func TestNewShortLinkDB(t *testing.T) {
 		assert.Equal(t, filePath, db.storage.F.Name())
 
 		for id, expectedLink := range expected {
-			actualLink, err := db.GetByShort(id)
+			actualLink, err := db.GetByShort(ctx, id)
 			require.NoError(t, err)
 			assert.Equal(t, expectedLink, actualLink)
 		}
@@ -71,6 +74,7 @@ func TestNewShortLinkDB(t *testing.T) {
 }
 
 func TestShortLinkDB_GetById(t *testing.T) {
+	ctx := context.Background()
 	db := &ShortLinkDB{storage: ShortLinkStorage{
 		M: make(InMemoryStorage),
 	}}
@@ -83,14 +87,14 @@ func TestShortLinkDB_GetById(t *testing.T) {
 	db.storage.M[id] = sl
 
 	t.Run("Success", func(t *testing.T) {
-		result, err := db.GetByShort(id)
+		result, err := db.GetByShort(ctx, id)
 		assert.NoError(t, err)
 		assert.Equal(t, sl, result)
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
 		id := "non-existent"
-		result, err := db.GetByShort(id)
+		result, err := db.GetByShort(ctx, id)
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), fmt.Sprintf("No short link with ID: %s", id))
 		assert.Empty(t, result.ID)
@@ -98,6 +102,7 @@ func TestShortLinkDB_GetById(t *testing.T) {
 }
 
 func TestShortLinkDB_Save(t *testing.T) {
+	ctx := context.Background()
 	file, err := os.OpenFile(
 		filepath.Join(t.TempDir(), "storage.json"),
 		os.O_CREATE|os.O_RDWR,
@@ -117,7 +122,7 @@ func TestShortLinkDB_Save(t *testing.T) {
 	link := "https://new-link.com"
 
 	t.Run("Success", func(t *testing.T) {
-		result, err := db.Save(id, link)
+		result, err := db.Save(ctx, id, link)
 		assert.NoError(t, err)
 		assert.Equal(t, id, result.ID)
 		assert.Equal(t, link, result.Link)
@@ -140,13 +145,15 @@ func TestShortLinkDB_Save(t *testing.T) {
 
 	t.Run("AlreadyExists", func(t *testing.T) {
 		// Attempt to save the same ID again
-		_, err := db.Save(id, "https://another-link.com")
+		_, err := db.Save(ctx, id, "https://another-link.com")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is already used")
 	})
 }
 
 func TestShortLinkDB_Database(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("gets a link", func(t *testing.T) {
 		sqlDB, mock, err := sqlmock.New()
 		require.NoError(t, err)
@@ -162,7 +169,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.GetByShort("abcde")
+		actual, err := db.GetByShort(ctx, "abcde")
 
 		require.NoError(t, err)
 		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
@@ -183,7 +190,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.GetByShort("abcde")
+		actual, err := db.GetByShort(ctx, "abcde")
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Equal(t, "abcde", actual.ID)
@@ -203,7 +210,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.Save("abcde", "https://example.com")
+		actual, err := db.Save(ctx, "abcde", "https://example.com")
 
 		require.NoError(t, err)
 		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
@@ -224,7 +231,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.Save("abcde", "https://example.com")
+		actual, err := db.Save(ctx, "abcde", "https://example.com")
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
@@ -249,6 +256,7 @@ func TestShortLinkDB_Close(t *testing.T) {
 }
 
 func TestShortLinkDB_SaveFileErrors(t *testing.T) {
+	ctx := context.Background()
 	file, err := os.CreateTemp(t.TempDir(), "closed-storage-*.json")
 	require.NoError(t, err)
 	require.NoError(t, file.Close())
@@ -258,7 +266,7 @@ func TestShortLinkDB_SaveFileErrors(t *testing.T) {
 		storageType: config.File,
 	}
 
-	actual, err := db.Save("abcde", "https://example.com")
+	actual, err := db.Save(ctx, "abcde", "https://example.com")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Can't clean storage")

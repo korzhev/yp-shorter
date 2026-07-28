@@ -29,7 +29,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(link)
+	sl, err := s.ShortLinkService.Save(r.Context(), link)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -47,7 +47,7 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty ID", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.GetByShort(id)
+	sl, err := s.ShortLinkService.GetByShort(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -73,7 +73,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty URL", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(link)
+	sl, err := s.ShortLinkService.Save(r.Context(), link)
 
 	if err != nil {
 		logger.Log.Infow("Unexpected error while saving short link", "error", err)

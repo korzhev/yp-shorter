@@ -41,20 +41,19 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 	return sl, nil
 }
 
-func (s *ShortLinkDB) getByShortFromDB(short string) (model.ShortLink, error) {
-	ctx := context.Background()
+func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model.ShortLink, error) {
 	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE short = $1 LIMIT 1", short)
 	sl := model.ShortLink{ID: short}
 	err := row.Scan(&sl.ID, &sl.Link)
 	return sl, err
 }
 
-func (s *ShortLinkDB) GetByShort(short string) (model.ShortLink, error) {
+func (s *ShortLinkDB) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
 	switch s.storageType {
 	case config.Database:
-		sl, err = s.getByShortFromDB(short)
+		sl, err = s.getByShortFromDB(ctx, short)
 	default:
 		// File also as InMemory uses memory to get ShortLink
 		sl, err = s.getByShortFromMemory(short)
@@ -63,8 +62,7 @@ func (s *ShortLinkDB) GetByShort(short string) (model.ShortLink, error) {
 	return sl, err
 }
 
-func (s *ShortLinkDB) saveDatabase(short, link string) (model.ShortLink, error) {
-	ctx := context.Background()
+func (s *ShortLinkDB) saveDatabase(ctx context.Context, short, link string) (model.ShortLink, error) {
 	sl := model.ShortLink{ID: short, Link: link}
 	_, err := s.DB.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", short, link)
 	if err != nil {
@@ -111,14 +109,14 @@ func (s *ShortLinkDB) saveFile(id, link string) (model.ShortLink, error) {
 	return sl, nil
 }
 
-func (s *ShortLinkDB) Save(id, link string) (model.ShortLink, error) {
+func (s *ShortLinkDB) Save(ctx context.Context, id, link string) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
 	switch s.storageType {
 	case config.File:
 		sl, err = s.saveFile(id, link)
 	case config.Database:
-		sl, err = s.saveDatabase(id, link)
+		sl, err = s.saveDatabase(ctx, id, link)
 	default:
 		sl, err = s.saveInMemory(id, link)
 	}
