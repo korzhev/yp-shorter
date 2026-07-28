@@ -2,12 +2,14 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -142,4 +144,131 @@ func TestShortLinkDB_Save(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is already used")
 	})
+}
+
+func TestShortLinkDB_Database(t *testing.T) {
+	t.Run("gets a link", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		// ExpectQuery uses strings as regexp, so `$`,`(`,`)` should be quoted
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE short = \$1 LIMIT 1`).
+			WithArgs("abcde").
+			WillReturnRows(sqlmock.NewRows([]string{"short", "link"}).
+				AddRow("abcde", "https://example.com"))
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.GetByShort("abcde")
+
+		require.NoError(t, err)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+	})
+
+	t.Run("returns query error", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		expectedErr := errors.New("query failed")
+
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE short = \$1 LIMIT 1`).
+			WithArgs("abcde").
+			WillReturnError(expectedErr)
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.GetByShort("abcde")
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, "abcde", actual.ID)
+	})
+
+	t.Run("saves a link", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+
+		mock.ExpectExec(`INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`).
+			WithArgs("abcde", "https://example.com").
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.Save("abcde", "https://example.com")
+
+		require.NoError(t, err)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+	})
+
+	t.Run("returns insert error", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		expectedErr := errors.New("insert failed")
+
+		mock.ExpectExec(`INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`).
+			WithArgs("abcde", "https://example.com").
+			WillReturnError(expectedErr)
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.Save("abcde", "https://example.com")
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+	})
+}
+
+func TestShortLinkDB_Close(t *testing.T) {
+	t.Run("in-memory storage", func(t *testing.T) {
+		db := NewShortLinkDB("", "", config.InMemory)
+		require.NoError(t, db.Close())
+	})
+
+	t.Run("database storage", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		require.NoError(t, db.Close())
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestShortLinkDB_SaveFileErrors(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "closed-storage-*.json")
+	require.NoError(t, err)
+	require.NoError(t, file.Close())
+
+	db := &ShortLinkDB{
+		storage:     ShortLinkStorage{M: make(InMemoryStorage), F: file},
+		storageType: config.File,
+	}
+
+	actual, err := db.Save("abcde", "https://example.com")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Can't clean storage")
+	assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+}
+
+func TestNewShortLinkDB_Database(t *testing.T) {
+	// real connection will be set only with first query, so dsn doesn't matter here
+	db := NewShortLinkDB("", "postgres://user:pass@localhost/test", config.Database)
+	require.NotNil(t, db)
+	require.NotNil(t, db.DB)
+	require.NoError(t, db.Close())
 }
