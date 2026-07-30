@@ -127,3 +127,34 @@ func TestSave(t *testing.T) {
 		assert.Equal(t, model.ShortLink{}, res)
 	})
 }
+
+func TestSaveBatch(t *testing.T) {
+	ctx := context.Background()
+	batch := []model.ShortLink{
+		{ID: "first-id", Link: "/first"},
+		{ID: "second-id", Link: "/second"},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		mockRepo.EXPECT().SaveBatch(ctx, batch).Return(batch, nil)
+
+		actual, err := service.SaveBatch(ctx, batch)
+
+		assert.NoError(t, err)
+		assert.Equal(t, batch, actual)
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		expectedErr := errors.New("batch save failed")
+		mockRepo.EXPECT().SaveBatch(ctx, batch).Return(nil, expectedErr)
+
+		actual, err := service.SaveBatch(ctx, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Nil(t, actual)
+	})
+}

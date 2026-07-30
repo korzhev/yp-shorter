@@ -15,6 +15,7 @@ type IShortLinkService interface {
 	GenerateID() string
 	GetByShort(ctx context.Context, id string) (model.ShortLink, error)
 	Save(ctx context.Context, link string) (model.ShortLink, error)
+	SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error)
 }
 
 type ShortLinkService struct {
@@ -48,4 +49,8 @@ func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLin
 		i++
 	}
 	return sl, err
+}
+
+func (s ShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+	return  s.ShortLinkDB.SaveBatch(ctx, batch)
 }

@@ -187,6 +187,95 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 	})
 }
 
+func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
+	const baseResultAddr = "http://localhost:8080/"
+	oldBaseResultAddr := config.Conf.BaseResultAddr
+	config.Conf.BaseResultAddr = baseResultAddr
+	t.Cleanup(func() {
+		config.Conf.BaseResultAddr = oldBaseResultAddr
+	})
+
+	batch := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first"},
+		{ID: "second-id", Link: "https://example.com/second"},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().SaveBatch(gomock.Any(), batch).Return(batch, nil)
+
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/shorten/batch",
+			bytes.NewBufferString(`[
+				{"correlation_id":"first-id","original_url":"https://example.com/first"},
+				{"correlation_id":"second-id","original_url":"https://example.com/second"}
+			]`),
+		)
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.JSONEq(t, `[
+			{"correlation_id":"first-id","short_url":"http://localhost:8080/first-id"},
+			{"correlation_id":"second-id","short_url":"http://localhost:8080/second-id"}
+		]`, rr.Body.String())
+	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		req := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewBufferString(`[{`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Cannot decode request JSON body")
+	})
+
+	t.Run("Empty correlation ID or original URL", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/shorten/batch",
+			bytes.NewBufferString(`[{"correlation_id":"","original_url":"https://example.com"}]`),
+		)
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Empty CorrelationID or OriginalURL")
+	})
+
+	t.Run("Service Error", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		expectedErr := errors.New("batch save failed")
+		mockService.EXPECT().SaveBatch(gomock.Any(), batch).Return(nil, expectedErr)
+
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/shorten/batch",
+			bytes.NewBufferString(`[
+				{"correlation_id":"first-id","original_url":"https://example.com/first"},
+				{"correlation_id":"second-id","original_url":"https://example.com/second"}
+			]`),
+		)
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), expectedErr.Error())
+	})
+}
+
 func init() {
 	// I don't want to do anything with logger singletone
 	logger.InitLogger("error")
