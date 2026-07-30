@@ -71,10 +71,30 @@ func (s *ShortLinkDB) saveDatabase(ctx context.Context, short, link string) (mod
 	return sl, nil
 }
 
+func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+	res := make([]model.ShortLink, 0, len(batch))
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return res, err
+	}
+	for _, item := range batch {
+		sl := model.ShortLink{ID: item.ID, Link: item.Link}
+		_, err := tx.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", item.ID, item.Link)
+		if err != nil {
+			if rerr := tx.Rollback(); rerr != nil {
+				return res, rerr
+			}
+			return res, err
+		}
+		res = append(res, sl)
+	}
+
+	err = tx.Commit()
+	return res, err
+}
+
 func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
-	s.storage.Lock()
 	sl := model.ShortLink{ID: id, Link: link}
-	defer s.storage.Unlock()
 	// check that id is not used
 	_, ok := s.storage.M[id]
 	// ok means id is already used
@@ -86,35 +106,38 @@ func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
 	return sl, nil
 }
 
-func (s *ShortLinkDB) saveFile(id, link string) (model.ShortLink, error) {
-	sl, err := s.saveInMemory(id, link)
-	if err != nil {
-		return sl, err
-	}
-
+func (s *ShortLinkDB) saveFile() error {
 	b, err := json.Marshal(s.storage.M)
 	if err != nil {
-		return sl, fmt.Errorf("Can't marshal data: %v with error: %s", s.storage.M, err.Error())
+		return fmt.Errorf("Can't marshal data: %v with error: %s", s.storage.M, err.Error())
 	}
 	if err := s.storage.F.Truncate(0); err != nil {
-		return sl, fmt.Errorf("Can't clean storage: %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("Can't clean storage: %s, %s", s.storage.F.Name(), err.Error())
 	}
 
 	if _, err := s.storage.F.Seek(0, io.SeekStart); err != nil {
-		return sl, fmt.Errorf("Can't set cursor:  %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("Can't set cursor:  %s, %s", s.storage.F.Name(), err.Error())
 	}
 	if _, err := s.storage.F.Write(b); err != nil {
-		return sl, fmt.Errorf("Can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("Can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
 	}
-	return sl, nil
+	return nil
 }
 
 func (s *ShortLinkDB) Save(ctx context.Context, id, link string) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
+	if s.storageType != config.Database {
+		s.storage.Lock()
+		defer s.storage.Unlock()
+	}
 	switch s.storageType {
 	case config.File:
-		sl, err = s.saveFile(id, link)
+		sl, err = s.saveInMemory(id, link)
+		if err != nil {
+			return sl, err
+		}
+		err = s.saveFile()
 	case config.Database:
 		sl, err = s.saveDatabase(ctx, id, link)
 	default:
@@ -122,6 +145,48 @@ func (s *ShortLinkDB) Save(ctx context.Context, id, link string) (model.ShortLin
 	}
 
 	return sl, err
+}
+
+func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortLink, error) {
+	res := make([]model.ShortLink, 0, len(batch))
+
+	for _, item := range batch {
+		sl := model.ShortLink{ID: item.ID, Link: item.Link}
+		// check that id is not used
+		_, ok := s.storage.M[item.ID]
+		// ok means id is already used
+		if ok {
+			// Unique index error, like DB
+			return res, fmt.Errorf("ID: %s is already used", item.ID)
+		}
+		s.storage.M[item.ID] = sl
+		res = append(res, sl)
+	}
+	return res, nil
+}
+
+func (s *ShortLinkDB) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+	res := make([]model.ShortLink, 0, len(batch))
+	var err error
+	if s.storageType != config.Database {
+		s.storage.Lock()
+		defer s.storage.Unlock()
+	}
+
+	switch s.storageType {
+	case config.File:
+		res, err = s.saveBatchInMemory(batch)
+		if err != nil {
+			return res, err
+		}
+		err = s.saveFile()
+	case config.Database:
+		res, err = s.saveBatchDatabase(ctx, batch)
+	default:
+		res, err = s.saveBatchInMemory(batch)
+	}
+
+	return res, err
 }
 
 func (s *ShortLinkDB) Close() error {

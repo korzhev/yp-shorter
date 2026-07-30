@@ -94,4 +94,47 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write(resp)
+
+}
+
+func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	var req []model.ShortLink
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		http.Error(w, "Cannot decode request JSON body", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	for _, sl := range req {
+		if sl.ID == "" || sl.Link == "" {
+			logger.Log.Infow("Empty URL", "ShortLink", sl)
+			http.Error(w, "Empty CorrelationID or OriginalURL", http.StatusBadRequest)
+			return
+		}
+	}
+
+	links, err := s.ShortLinkService.SaveBatch(r.Context(), req)
+
+	if err != nil {
+		logger.Log.Infow("Unexpected error while saving short links", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res := make([]model.ShortLinkBatchItemResponse, 0, len(links))
+	for _, l := range links {
+		res = append(res, model.ShortLinkBatchItemResponse{CorrelationID: l.ID, ShortURL: config.Conf.BaseResultAddr + l.ID})
+	}
+
+	resp, err := json.Marshal(res)
+	if err != nil {
+		logger.Log.Infow("Enccoding response", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write(resp)
 }

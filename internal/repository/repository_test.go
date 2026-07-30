@@ -151,6 +151,140 @@ func TestShortLinkDB_Save(t *testing.T) {
 	})
 }
 
+func TestShortLinkDB_SaveBatch(t *testing.T) {
+	ctx := context.Background()
+	batch := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first"},
+		{ID: "second-id", Link: "https://example.com/second"},
+	}
+
+	t.Run("saves batch in memory", func(t *testing.T) {
+		db := NewShortLinkDB("", "", config.InMemory)
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		require.NoError(t, err)
+		assert.Equal(t, batch, actual)
+		assert.Equal(t, InMemoryStorage{
+			"first-id":  batch[0],
+			"second-id": batch[1],
+		}, db.storage.M)
+	})
+
+	t.Run("returns duplicate error", func(t *testing.T) {
+		db := NewShortLinkDB("", "", config.InMemory)
+		db.storage.M[batch[0].ID] = batch[0]
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ID: first-id is already used")
+		assert.Empty(t, actual)
+	})
+
+	t.Run("saves batch to file", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "storage.json")
+		db := NewShortLinkDB(filePath, "", config.File)
+		t.Cleanup(func() {
+			require.NoError(t, db.Close())
+		})
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		require.NoError(t, err)
+		assert.Equal(t, batch, actual)
+
+		data, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		var persisted InMemoryStorage
+		require.NoError(t, json.Unmarshal(data, &persisted))
+		assert.Equal(t, db.storage.M, persisted)
+	})
+}
+
+func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
+	ctx := context.Background()
+	batch := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first"},
+		{ID: "second-id", Link: "https://example.com/second"},
+	}
+	insertQuery := `INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`
+
+	newDB := func(t *testing.T) (*ShortLinkDB, sqlmock.Sqlmock) {
+		t.Helper()
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			mock.ExpectClose()
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		return &ShortLinkDB{DB: sqlDB, storageType: config.Database}, mock
+	}
+
+	t.Run("commits batch", func(t *testing.T) {
+		db, mock := newDB(t)
+		mock.ExpectBegin()
+		for _, item := range batch {
+			mock.ExpectExec(insertQuery).
+				WithArgs(item.ID, item.Link).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+		}
+		mock.ExpectCommit()
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		require.NoError(t, err)
+		assert.Equal(t, batch, actual)
+	})
+
+	t.Run("returns begin error", func(t *testing.T) {
+		db, mock := newDB(t)
+		expectedErr := errors.New("begin failed")
+		mock.ExpectBegin().WillReturnError(expectedErr)
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("rolls back on insert error", func(t *testing.T) {
+		db, mock := newDB(t)
+		expectedErr := errors.New("insert failed")
+		mock.ExpectBegin()
+		mock.ExpectExec(insertQuery).
+			WithArgs(batch[0].ID, batch[0].Link).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(insertQuery).
+			WithArgs(batch[1].ID, batch[1].Link).
+			WillReturnError(expectedErr)
+		mock.ExpectRollback()
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, batch[:1], actual)
+	})
+
+	t.Run("returns commit error", func(t *testing.T) {
+		db, mock := newDB(t)
+		expectedErr := errors.New("commit failed")
+		mock.ExpectBegin()
+		for _, item := range batch {
+			mock.ExpectExec(insertQuery).
+				WithArgs(item.ID, item.Link).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+		}
+		mock.ExpectCommit().WillReturnError(expectedErr)
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, batch, actual)
+	})
+}
+
 func TestShortLinkDB_Database(t *testing.T) {
 	ctx := context.Background()
 
