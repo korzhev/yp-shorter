@@ -15,7 +15,7 @@ type IShortLinkService interface {
 	GenerateID() string
 	GetByShort(ctx context.Context, id string) (model.ShortLink, error)
 	Save(ctx context.Context, link string) (model.ShortLink, error)
-	SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error)
+	SaveBatch(ctx context.Context, batch []model.ShortLinkBatchItemRequest) ([]model.ShortLink, error)
 }
 
 type ShortLinkService struct {
@@ -37,9 +37,9 @@ func (s ShortLinkService) GetByShort(ctx context.Context, short string) (model.S
 }
 
 func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLink, error) {
-	var short = s.GenerateID()
+	short := s.GenerateID()
 
-	var sl, err = s.ShortLinkDB.Save(ctx, short, link)
+	sl, err := s.ShortLinkDB.Save(ctx, short, link)
 	i := 0
 
 	for i < 10 && err != nil {
@@ -51,6 +51,24 @@ func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLin
 	return sl, err
 }
 
-func (s ShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
-	return  s.ShortLinkDB.SaveBatch(ctx, batch)
+func (s ShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLinkBatchItemRequest) ([]model.ShortLink, error) {
+	sls := make([]model.ShortLink, 0, len(batch))
+
+	for _, l := range batch {
+		sls = append(sls, model.ShortLink{ID: s.GenerateID(), Link: l.OriginalURL})
+	}
+	// as i didn't understand, that CorrelationID != ShortID
+	res, err := s.ShortLinkDB.SaveBatch(ctx, sls)
+	i := 0
+	// there is retry to save ALL batch items if uniqe error is thrown
+	// i desided not to over complicate repository, because GenerateID() is in service
+	for i < 10 && err != nil {
+		// retry up to 10 times to save if id is not unique
+		for j := range sls {
+			sls[j].ID = s.GenerateID()
+		}
+		res, err = s.ShortLinkDB.SaveBatch(ctx, sls)
+		i++
+	}
+	return res, err
 }

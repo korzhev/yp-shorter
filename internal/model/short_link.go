@@ -3,8 +3,8 @@ package model
 import "context"
 
 type ShortLink struct {
-	ID   string `json:"correlation_id"`
-	Link string `json:"original_url"`
+	ID   string 
+	Link string 
 }
 
 type IShortLinkRepository interface {
@@ -20,6 +20,11 @@ type ShortLinkRequest struct {
 
 type ShortLinkResponse struct {
 	Result string `json:"result"`
+}
+
+type ShortLinkBatchItemRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL string `json:"original_url"`
 }
 
 type ShortLinkBatchItemResponse struct {

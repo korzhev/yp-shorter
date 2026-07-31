@@ -86,7 +86,7 @@ func (mr *MockIShortLinkServiceMockRecorder) Save(ctx, link any) *gomock.Call {
 }
 
 // SaveBatch mocks base method.
-func (m *MockIShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+func (m *MockIShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLinkBatchItemRequest) ([]model.ShortLink, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SaveBatch", ctx, batch)
 	ret0, _ := ret[0].([]model.ShortLink)

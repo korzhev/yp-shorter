@@ -182,6 +182,23 @@ func TestShortLinkDB_SaveBatch(t *testing.T) {
 		assert.Empty(t, actual)
 	})
 
+	t.Run("does not partially save when a later item is duplicate", func(t *testing.T) {
+		db := NewShortLinkDB("", "", config.InMemory)
+		existing := model.ShortLink{
+			ID:   batch[1].ID,
+			Link: "https://example.com/already-stored",
+		}
+		db.storage.M[existing.ID] = existing
+
+		actual, err := db.SaveBatch(ctx, batch)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ID: second-id is already used")
+		assert.Empty(t, actual)
+		assert.Equal(t, InMemoryStorage{existing.ID: existing}, db.storage.M)
+		assert.NotContains(t, db.storage.M, batch[0].ID)
+	})
+
 	t.Run("saves batch to file", func(t *testing.T) {
 		filePath := filepath.Join(t.TempDir(), "storage.json")
 		db := NewShortLinkDB(filePath, "", config.File)

@@ -98,7 +98,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 }
 
 func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	var req []model.ShortLink
+	var req []model.ShortLinkBatchItemRequest
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&req); err != nil {
 		logger.Log.Infow("Cannot decode request JSON body", "error", err)
@@ -107,8 +107,13 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 	}
 
 	defer r.Body.Close()
+	if len(req) > 20 {
+		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)
+		http.Error(w, "Too many items in batch request", http.StatusBadRequest)
+		return
+	}
 	for _, sl := range req {
-		if sl.ID == "" || sl.Link == "" {
+		if sl.CorrelationID == "" || sl.OriginalURL == "" {
 			logger.Log.Infow("Empty URL", "ShortLink", sl)
 			http.Error(w, "Empty CorrelationID or OriginalURL", http.StatusBadRequest)
 			return
@@ -122,9 +127,16 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if len(links) != len(req) {
+		s := fmt.Sprintf("Different length of links %v and req %v", len(links), len(req))
+		logger.Log.Infow(s, "error", err)
+		http.Error(w, s, http.StatusBadRequest)
+		return
+	}
 	res := make([]model.ShortLinkBatchItemResponse, 0, len(links))
-	for _, l := range links {
-		res = append(res, model.ShortLinkBatchItemResponse{CorrelationID: l.ID, ShortURL: config.Conf.BaseResultAddr + l.ID})
+	for i, l := range links {
+		res = append(res, model.ShortLinkBatchItemResponse{CorrelationID: req[i].CorrelationID, ShortURL: config.Conf.BaseResultAddr +"/"+ l.ID})
 	}
 
 	resp, err := json.Marshal(res)

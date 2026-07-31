@@ -130,27 +130,58 @@ func TestSave(t *testing.T) {
 
 func TestSaveBatch(t *testing.T) {
 	ctx := context.Background()
-	batch := []model.ShortLink{
-		{ID: "first-id", Link: "/first"},
-		{ID: "second-id", Link: "/second"},
+	const charset = "abc"
+	const idLength = 3
+	batch := []model.ShortLinkBatchItemRequest{
+		{CorrelationID: "first-id", OriginalURL: "http://first"},
+		{CorrelationID: "second-id", OriginalURL: "http://second"},
+	}
+	res := []model.ShortLink{
+		{ID: "first", Link: "http://f"},
+		{ID: "second", Link: "http://s"},
+	}
+	batchMatcher := gomock.Cond(func(links []model.ShortLink) bool {
+		if len(links) != len(batch) {
+			return false
+		}
+
+		for i, link := range links {
+			if link.Link != batch[i].OriginalURL || len(link.ID) != idLength {
+				return false
+			}
+			for _, char := range link.ID {
+				if !strings.ContainsRune(charset, char) {
+					return false
+				}
+			}
+		}
+
+		return true
+	})
+	newService := func(mockRepo model.IShortLinkRepository) ShortLinkService {
+		return ShortLinkService{
+			Charset:     charset,
+			IDLength:    idLength,
+			ShortLinkDB: mockRepo,
+		}
 	}
 
 	t.Run("Success", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
-		service := ShortLinkService{ShortLinkDB: mockRepo}
-		mockRepo.EXPECT().SaveBatch(ctx, batch).Return(batch, nil)
+		service := newService(mockRepo)
+		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(res, nil)
 
 		actual, err := service.SaveBatch(ctx, batch)
 
 		assert.NoError(t, err)
-		assert.Equal(t, batch, actual)
+		assert.Equal(t, res, actual)
 	})
 
 	t.Run("Repository error", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
-		service := ShortLinkService{ShortLinkDB: mockRepo}
+		service := newService(mockRepo)
 		expectedErr := errors.New("batch save failed")
-		mockRepo.EXPECT().SaveBatch(ctx, batch).Return(nil, expectedErr)
+		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, expectedErr).Times(11)
 
 		actual, err := service.SaveBatch(ctx, batch)
 

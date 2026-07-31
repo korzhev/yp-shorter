@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -188,22 +189,26 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 }
 
 func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
-	const baseResultAddr = "http://localhost:8080/"
+	const baseResultAddr = "http://localhost:8080"
 	oldBaseResultAddr := config.Conf.BaseResultAddr
 	config.Conf.BaseResultAddr = baseResultAddr
 	t.Cleanup(func() {
 		config.Conf.BaseResultAddr = oldBaseResultAddr
 	})
 
-	batch := []model.ShortLink{
-		{ID: "first-id", Link: "https://example.com/first"},
-		{ID: "second-id", Link: "https://example.com/second"},
+	batchRequest := []model.ShortLinkBatchItemRequest{
+		{CorrelationID: "first-id", OriginalURL: "https://example.com/first"},
+		{CorrelationID: "second-id", OriginalURL: "https://example.com/second"},
+	}
+	savedLinks := []model.ShortLink{
+		{ID: "first-short-id", Link: "https://example.com/first"},
+		{ID: "second-short-id", Link: "https://example.com/second"},
 	}
 
 	t.Run("Success", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
-		mockService.EXPECT().SaveBatch(gomock.Any(), batch).Return(batch, nil)
+		mockService.EXPECT().SaveBatch(gomock.Any(), batchRequest).Return(savedLinks, nil)
 
 		req := httptest.NewRequest(
 			http.MethodPost,
@@ -220,8 +225,8 @@ func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 		assert.JSONEq(t, `[
-			{"correlation_id":"first-id","short_url":"http://localhost:8080/first-id"},
-			{"correlation_id":"second-id","short_url":"http://localhost:8080/second-id"}
+			{"correlation_id":"first-id","short_url":"http://localhost:8080/first-short-id"},
+			{"correlation_id":"second-id","short_url":"http://localhost:8080/second-short-id"}
 		]`, rr.Body.String())
 	})
 
@@ -235,6 +240,45 @@ func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Cannot decode request JSON body")
+	})
+
+	t.Run("Too many items", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		batch := make([]model.ShortLinkBatchItemRequest, 21)
+		for i := range batch {
+			batch[i] = model.ShortLinkBatchItemRequest{
+				CorrelationID: "correlation-id",
+				OriginalURL:   "https://example.com",
+			}
+		}
+		body, err := json.Marshal(batch)
+		assert.NoError(t, err)
+		mockService.EXPECT().SaveBatch(gomock.Any(), gomock.Any()).Times(0)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Too many items in batch request")
+	})
+
+	t.Run("Empty batch", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		emptyBatch := []model.ShortLinkBatchItemRequest{}
+		mockService.EXPECT().SaveBatch(gomock.Any(), emptyBatch).Return([]model.ShortLink{}, nil)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewBufferString(`[]`))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.JSONEq(t, `[]`, rr.Body.String())
 	})
 
 	t.Run("Empty correlation ID or original URL", func(t *testing.T) {
@@ -257,7 +301,7 @@ func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
 		expectedErr := errors.New("batch save failed")
-		mockService.EXPECT().SaveBatch(gomock.Any(), batch).Return(nil, expectedErr)
+		mockService.EXPECT().SaveBatch(gomock.Any(), batchRequest).Return(nil, expectedErr)
 
 		req := httptest.NewRequest(
 			http.MethodPost,
@@ -273,6 +317,22 @@ func TestAPISaveLinkBatchHandlerFunc(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), expectedErr.Error())
+	})
+
+	t.Run("Different response length", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().SaveBatch(gomock.Any(), batchRequest).Return(savedLinks[:1], nil)
+
+		body, err := json.Marshal(batchRequest)
+		assert.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Different length of links 1 and req 2")
 	})
 }
 

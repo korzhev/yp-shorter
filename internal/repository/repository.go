@@ -151,7 +151,6 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortL
 	res := make([]model.ShortLink, 0, len(batch))
 
 	for _, item := range batch {
-		sl := model.ShortLink{ID: item.ID, Link: item.Link}
 		// check that id is not used
 		_, ok := s.storage.M[item.ID]
 		// ok means id is already used
@@ -159,6 +158,10 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortL
 			// Unique index error, like DB
 			return res, fmt.Errorf("ID: %s is already used", item.ID)
 		}
+	}
+
+	for _, item := range batch {
+		sl := model.ShortLink{ID: item.ID, Link: item.Link}
 		s.storage.M[item.ID] = sl
 		res = append(res, sl)
 	}
