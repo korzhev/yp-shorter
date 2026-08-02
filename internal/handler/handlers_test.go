@@ -4,18 +4,93 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
+
+func TestIsDublicateError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "PostgreSQL duplicate link",
+			err: &pgconn.PgError{
+				Code:           "23505",
+				ConstraintName: "short_links_link_uidx",
+			},
+			want: true,
+		},
+		{
+			name: "Wrapped PostgreSQL duplicate link",
+			err: fmt.Errorf("save link: %w", &pgconn.PgError{
+				Code:           "23505",
+				ConstraintName: "short_links_link_uidx",
+			}),
+			want: true,
+		},
+		{
+			name: "PostgreSQL different constraint",
+			err: &pgconn.PgError{
+				Code:           "23505",
+				ConstraintName: "short_links_pkey",
+			},
+			want: false,
+		},
+		{
+			name: "PostgreSQL different code",
+			err: &pgconn.PgError{
+				Code:           "23503",
+				ConstraintName: "short_links_link_uidx",
+			},
+			want: false,
+		},
+		{
+			name: "In-memory duplicate link",
+			err:  repository.NewInMemoryDublicateError("https://example.com"),
+			want: true,
+		},
+		{
+			name: "Wrapped in-memory duplicate link",
+			err:  fmt.Errorf("save link: %w", repository.NewInMemoryDublicateError("https://example.com")),
+			want: true,
+		},
+		{
+			name: "In-memory duplicate with empty link",
+			err:  repository.NewInMemoryDublicateError(""),
+			want: false,
+		},
+		{
+			name: "Unrelated error",
+			err:  errors.New("save failed"),
+			want: false,
+		},
+		{
+			name: "Nil error",
+			err:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsDublicateError(tt.err))
+		})
+	}
+}
 
 func TestSaveLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {

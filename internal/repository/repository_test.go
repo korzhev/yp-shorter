@@ -101,6 +101,41 @@ func TestShortLinkDB_GetById(t *testing.T) {
 	})
 }
 
+func TestShortLinkDB_GetByLink(t *testing.T) {
+	ctx := context.Background()
+	expected := model.ShortLink{ID: "test-id", Link: "https://example.com"}
+	db := NewShortLinkDB("", "", config.InMemory)
+	db.storage.M[expected.ID] = expected
+
+	t.Run("finds link in memory", func(t *testing.T) {
+		actual, err := db.GetByLink(ctx, expected.Link)
+
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("returns not found error", func(t *testing.T) {
+		link := "https://example.com/missing"
+
+		actual, err := db.GetByLink(ctx, link)
+
+		require.Error(t, err)
+		assert.EqualError(t, err, fmt.Sprintf("No link: %s", link))
+		assert.Equal(t, model.ShortLink{}, actual)
+	})
+}
+
+func TestInMemoryDublicateError(t *testing.T) {
+	link := "https://example.com"
+
+	err := NewInMemoryDublicateError(link)
+
+	var duplicateErr *InMemoryDublicateError
+	require.ErrorAs(t, err, &duplicateErr)
+	assert.Equal(t, link, duplicateErr.Link)
+	assert.EqualError(t, err, "Link: https://example.com is already saved")
+}
+
 func TestShortLinkDB_Save(t *testing.T) {
 	ctx := context.Background()
 	file, err := os.OpenFile(
@@ -345,6 +380,47 @@ func TestShortLinkDB_Database(t *testing.T) {
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Equal(t, "abcde", actual.ID)
+	})
+
+	t.Run("gets by original link", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		link := "https://example.com"
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 LIMIT 1`).
+			WithArgs(link).
+			WillReturnRows(sqlmock.NewRows([]string{"short", "link"}).AddRow("abcde", link))
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.GetByLink(ctx, link)
+
+		require.NoError(t, err)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: link}, actual)
+	})
+
+	t.Run("returns get by original link error", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		link := "https://example.com"
+		expectedErr := errors.New("query failed")
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 LIMIT 1`).
+			WithArgs(link).
+			WillReturnError(expectedErr)
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.GetByLink(ctx, link)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, model.ShortLink{}, actual)
 	})
 
 	t.Run("saves a link", func(t *testing.T) {

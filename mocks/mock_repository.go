@@ -55,6 +55,21 @@ func (mr *MockIShortLinkRepositoryMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockIShortLinkRepository)(nil).Close))
 }
 
+// GetByLink mocks base method.
+func (m *MockIShortLinkRepository) GetByLink(ctx context.Context, link string) (model.ShortLink, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByLink", ctx, link)
+	ret0, _ := ret[0].(model.ShortLink)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByLink indicates an expected call of GetByLink.
+func (mr *MockIShortLinkRepositoryMockRecorder) GetByLink(ctx, link any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByLink", reflect.TypeOf((*MockIShortLinkRepository)(nil).GetByLink), ctx, link)
+}
+
 // GetByShort mocks base method.
 func (m *MockIShortLinkRepository) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()

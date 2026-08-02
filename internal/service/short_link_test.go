@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -62,6 +63,35 @@ func TestGetById(t *testing.T) {
 	})
 }
 
+func TestGetByLink(t *testing.T) {
+	ctx := context.Background()
+	link := "https://example.com"
+	expected := model.ShortLink{ID: "abc123", Link: link}
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		mockRepo.EXPECT().GetByLink(ctx, link).Return(expected, nil)
+
+		actual, err := service.GetByLink(ctx, link)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		expectedErr := errors.New("not found")
+		mockRepo.EXPECT().GetByLink(ctx, link).Return(model.ShortLink{}, expectedErr)
+
+		actual, err := service.GetByLink(ctx, link)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Equal(t, model.ShortLink{}, actual)
+	})
+}
+
 func TestSave(t *testing.T) {
 	ctx := context.Background()
 	const charset = "abc"
@@ -103,7 +133,7 @@ func TestSave(t *testing.T) {
 		service := newService(mockRepo)
 		gomock.InOrder(
 			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
-				Return(model.ShortLink{}, errors.New("collision")),
+				Return(model.ShortLink{}, repository.NewInMemoryDublicateIDError("abc")),
 			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 				Return(model.ShortLink{ID: "abc", Link: testLink}, nil),
 		)
@@ -117,7 +147,7 @@ func TestSave(t *testing.T) {
 	t.Run("Fail after max retries", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		expectedErr := errors.New("persistent error")
+		expectedErr := repository.NewInMemoryDublicateIDError("abc")
 		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 			Return(model.ShortLink{}, expectedErr).Times(11)
 
@@ -181,11 +211,26 @@ func TestSaveBatch(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		expectedErr := errors.New("batch save failed")
-		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, expectedErr).Times(11)
+		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, expectedErr)
 
 		actual, err := service.SaveBatch(ctx, batch)
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Nil(t, actual)
+	})
+
+	t.Run("Success after ID collision", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := newService(mockRepo)
+		collisionErr := repository.NewInMemoryDublicateIDError("abc")
+		gomock.InOrder(
+			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, collisionErr),
+			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(res, nil),
+		)
+
+		actual, err := service.SaveBatch(ctx, batch)
+
+		assert.NoError(t, err)
+		assert.Equal(t, res, actual)
 	})
 }

@@ -55,6 +55,21 @@ func (mr *MockIShortLinkServiceMockRecorder) GenerateID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateID", reflect.TypeOf((*MockIShortLinkService)(nil).GenerateID))
 }
 
+// GetByLink mocks base method.
+func (m *MockIShortLinkService) GetByLink(ctx context.Context, Link string) (model.ShortLink, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByLink", ctx, Link)
+	ret0, _ := ret[0].(model.ShortLink)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByLink indicates an expected call of GetByLink.
+func (mr *MockIShortLinkServiceMockRecorder) GetByLink(ctx, Link any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByLink", reflect.TypeOf((*MockIShortLinkService)(nil).GetByLink), ctx, Link)
+}
+
 // GetByShort mocks base method.
 func (m *MockIShortLinkService) GetByShort(ctx context.Context, id string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()
