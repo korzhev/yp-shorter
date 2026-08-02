@@ -1,5 +1,3 @@
-// coverage:ignore file
-
 package main
 
 import (
@@ -46,7 +44,11 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 }
 
 func main() {
-	config.ParseFlags()
+	err := config.ParseFlags()
+	if err != nil {
+		logger.Log.Errorf("Error starting server: %s\n", err)
+		return
+	}
 	logger.InitLogger(config.Conf.LogLevel)
 	defer logger.Log.Sync()
 
@@ -74,7 +76,7 @@ func main() {
 	defer db.Close()
 
 	r := RootRouter(config.Conf, db)
-	err := http.ListenAndServe(config.Conf.RunAddr, r)
+	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
 	}

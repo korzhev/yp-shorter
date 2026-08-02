@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func withTestFlagsAndEnv(t *testing.T, args []string, env map[string]string) {
@@ -34,7 +35,7 @@ func TestParseFlags(t *testing.T) {
 	t.Run("uses default values", func(t *testing.T) {
 		withTestFlagsAndEnv(t, []string{"shortener"}, nil)
 
-		ParseFlags()
+		require.NoError(t, ParseFlags())
 
 		assert.Equal(t, DefaultCharset, Conf.ShortLinkCharset)
 		assert.Equal(t, ":8080", Conf.RunAddr)
@@ -58,7 +59,7 @@ func TestParseFlags(t *testing.T) {
 			"-d", "postgres://flag-user:flag-pass@localhost:5432/flag-db",
 		}, nil)
 
-		ParseFlags()
+		require.NoError(t, ParseFlags())
 
 		assert.Equal(t, "abc123", Conf.ShortLinkCharset)
 		assert.Equal(t, ":9090", Conf.RunAddr)
@@ -76,7 +77,7 @@ func TestParseFlags(t *testing.T) {
 			"-f", "/tmp/storage.json",
 		}, nil)
 
-		ParseFlags()
+		require.NoError(t, ParseFlags())
 
 		assert.Equal(t, "/tmp/storage.json", Conf.FileStoragePath)
 		assert.Empty(t, Conf.DBDSN)
@@ -103,7 +104,7 @@ func TestParseFlags(t *testing.T) {
 			"DATABASE_DSN":      "postgres://env-user:env-pass@localhost:5432/env-db",
 		})
 
-		ParseFlags()
+		require.NoError(t, ParseFlags())
 
 		assert.Equal(t, "xyz", Conf.ShortLinkCharset)
 		assert.Equal(t, ":7070", Conf.RunAddr)
@@ -115,4 +116,25 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, Database, Conf.StorageType)
 	})
 
+	t.Run("returns error when short link length exceeds maximum", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{
+			"shortener",
+			"-l", "13",
+		}, nil)
+
+		err := ParseFlags()
+
+		assert.EqualError(t, err, "short link id length should not be more than 12: 13")
+	})
+
+	t.Run("returns error for invalid environment value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"SH_LENGTH": "not-a-number",
+		})
+
+		err := ParseFlags()
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "ShortLinkLength")
+	})
 }

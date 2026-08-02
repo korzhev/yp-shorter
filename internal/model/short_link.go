@@ -9,6 +9,7 @@ type ShortLink struct {
 
 type IShortLinkRepository interface {
 	GetByShort(ctx context.Context, short string) (ShortLink, error)
+	GetByLink(ctx context.Context, link string) (ShortLink, error)
 	Save(ctx context.Context, id string, link string) (ShortLink, error)
 	SaveBatch(ctx context.Context, batch []ShortLink) ([]ShortLink, error)
 	Close() error

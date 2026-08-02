@@ -2,8 +2,7 @@ package config
 
 import (
 	"flag"
-
-	"log"
+	"fmt"
 
 	"github.com/caarlos0/env/v6"
 )
@@ -32,11 +31,11 @@ type Config struct {
 var Conf Config
 
 // test framework conflicts with init()
-func ParseFlags() {
+func ParseFlags() error {
 	flag.StringVar(&Conf.ShortLinkCharset, "c", DefaultCharset, "chars to use in id generator")
 	flag.StringVar(&Conf.RunAddr, "a", ":8080", "address and port to run server")
 	flag.StringVar(&Conf.BaseResultAddr, "b", "http://localhost:8080", "base url for short link")
-	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length")
+	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length, max length 12")
 	flag.StringVar(&Conf.LogLevel, "ll", "info", "log level")
 	flag.StringVar(&Conf.FileStoragePath, "f", "", "file storage path")
 	// sslmode=disable for local db in docker
@@ -46,8 +45,12 @@ func ParseFlags() {
 
 	err := env.Parse(&Conf)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	if Conf.ShortLinkLength > 12 {
+		return fmt.Errorf("short link id length should not be more than 12: %v", Conf.ShortLinkLength)
+	}
+
 	if Conf.FileStoragePath != "" {
 		Conf.StorageType = File
 	}
@@ -55,4 +58,5 @@ func ParseFlags() {
 	if Conf.DBDSN != "" {
 		Conf.StorageType = Database
 	}
+	return nil
 }

@@ -16,6 +16,34 @@ import (
 	"github.com/korzhev/yp-shorter/internal/model"
 )
 
+type InMemoryDublicateIDError struct {
+	ID string
+}
+
+func (e *InMemoryDublicateIDError) Error() string {
+	return fmt.Sprintf("ID: %s is already used", e.ID)
+}
+
+func NewInMemoryDublicateIDError(id string) error {
+	return &InMemoryDublicateIDError{
+		ID: id,
+	}
+}
+
+type InMemoryDublicateError struct {
+	Link string
+}
+
+func (e *InMemoryDublicateError) Error() string {
+	return fmt.Sprintf("Link: %s is already saved", e.Link)
+}
+
+func NewInMemoryDublicateError(link string) error {
+	return &InMemoryDublicateError{
+		Link: link,
+	}
+}
+
 type InMemoryStorage map[string]model.ShortLink
 
 type ShortLinkStorage struct {
@@ -41,9 +69,28 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 	return sl, nil
 }
 
+func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) {
+	s.storage.RLock()
+	for _, v := range s.storage.M {
+		if v.Link == link {
+			return v, nil
+		}
+	}
+	defer s.storage.RUnlock()
+
+	return model.ShortLink{}, fmt.Errorf("No link: %s", link)
+}
+
 func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model.ShortLink, error) {
 	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE short = $1 LIMIT 1", short)
 	sl := model.ShortLink{ID: short}
+	err := row.Scan(&sl.ID, &sl.Link)
+	return sl, err
+}
+
+func (s *ShortLinkDB) getByLinkFromDB(ctx context.Context, link string) (model.ShortLink, error) {
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE link = $1 LIMIT 1", link)
+	sl := model.ShortLink{}
 	err := row.Scan(&sl.ID, &sl.Link)
 	return sl, err
 }
@@ -57,6 +104,20 @@ func (s *ShortLinkDB) GetByShort(ctx context.Context, short string) (model.Short
 	default:
 		// File also as InMemory uses memory to get ShortLink
 		sl, err = s.getByShortFromMemory(short)
+	}
+
+	return sl, err
+}
+
+func (s *ShortLinkDB) GetByLink(ctx context.Context, link string) (model.ShortLink, error) {
+	var sl model.ShortLink
+	var err error
+	switch s.storageType {
+	case config.Database:
+		sl, err = s.getByLinkFromDB(ctx, link)
+	default:
+		// File also as InMemory uses memory to get ShortLink
+		sl, err = s.getByLinkFromMemory(link)
 	}
 
 	return sl, err
@@ -100,7 +161,12 @@ func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
 	// ok means id is already used
 	if ok {
 		// Unique index error, like DB
-		return sl, fmt.Errorf("ID: %s is already used", id)
+		return sl, NewInMemoryDublicateIDError(id)
+	}
+	for _, v := range s.storage.M {
+		if v.Link == link {
+			return sl, NewInMemoryDublicateError(link)
+		}
 	}
 	s.storage.M[id] = sl
 	return sl, nil
@@ -156,7 +222,7 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortL
 		// ok means id is already used
 		if ok {
 			// Unique index error, like DB
-			return res, fmt.Errorf("ID: %s is already used", item.ID)
+			return res, NewInMemoryDublicateIDError(item.ID)
 		}
 	}
 
