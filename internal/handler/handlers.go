@@ -20,7 +20,7 @@ type ShortLinkHandler struct {
 	ShortLinkService service.IShortLinkService
 }
 
-func IsDublicateError(err error) bool {
+func IsDuplicateError(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		// uniq index error
@@ -28,7 +28,7 @@ func IsDublicateError(err error) bool {
 			return true
 		}
 	}
-	var dError *repository.InMemoryDublicateError
+	var dError *repository.InMemoryDuplicateError
 	if errors.As(err, &dError) {
 		if dError.Link != "" {
 			return true
@@ -53,7 +53,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 	sl, err := s.ShortLinkService.Save(r.Context(), link)
 
 	status := http.StatusCreated
-	if IsDublicateError(err) {
+	if IsDuplicateError(err) {
 		status = http.StatusConflict
 		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
 	}
@@ -102,7 +102,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 	}
 	sl, err := s.ShortLinkService.Save(r.Context(), link)
 	status := http.StatusCreated
-	if IsDublicateError(err) {
+	if IsDuplicateError(err) {
 		status = http.StatusConflict
 		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
 	}

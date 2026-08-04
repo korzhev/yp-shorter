@@ -49,6 +49,7 @@ func main() {
 		logger.Log.Errorf("Error starting server: %s\n", err)
 		return
 	}
+	config.Conf.DetectStorageType()
 	logger.InitLogger(config.Conf.LogLevel)
 	defer logger.Log.Sync()
 

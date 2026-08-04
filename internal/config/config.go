@@ -28,6 +28,19 @@ type Config struct {
 	StorageType      StorageType
 }
 
+func (c *Config) DetectStorageType() StorageType {
+	c.StorageType = InMemory
+
+	if c.FileStoragePath != "" {
+		c.StorageType = File
+	}
+
+	if c.DBDSN != "" {
+		c.StorageType = Database
+	}
+	return c.StorageType
+}
+
 var Conf Config
 
 // test framework conflicts with init()
@@ -51,12 +64,7 @@ func ParseFlags() error {
 		return fmt.Errorf("short link id length should not be more than 12: %v", Conf.ShortLinkLength)
 	}
 
-	if Conf.FileStoragePath != "" {
-		Conf.StorageType = File
-	}
+	Conf.DetectStorageType()
 
-	if Conf.DBDSN != "" {
-		Conf.StorageType = Database
-	}
 	return nil
 }

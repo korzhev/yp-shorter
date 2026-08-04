@@ -49,7 +49,7 @@ func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLin
 	sl, err := s.ShortLinkDB.Save(ctx, short, link)
 	i := 0
 
-	for i < 10 && err != nil && s.isDublicateIDError(err) {
+	for i < 10 && err != nil && s.isDuplicateIDError(err) {
 		// retry up to 10 times to save if id is not unique
 		short = s.GenerateID()
 		sl, err = s.ShortLinkDB.Save(ctx, short, link)
@@ -58,7 +58,7 @@ func (s ShortLinkService) Save(ctx context.Context, link string) (model.ShortLin
 	return sl, err
 }
 
-func (s ShortLinkService) isDublicateIDError(err error) bool {
+func (s ShortLinkService) isDuplicateIDError(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		// uniq index error
@@ -66,7 +66,7 @@ func (s ShortLinkService) isDublicateIDError(err error) bool {
 			return true
 		}
 	}
-	var dError *repository.InMemoryDublicateIDError
+	var dError *repository.InMemoryDuplicateIDError
 	if errors.As(err, &dError) {
 		if dError.ID != "" {
 			return true
@@ -88,7 +88,7 @@ func (s ShortLinkService) SaveBatch(ctx context.Context, batch []model.ShortLink
 	i := 0
 	// there is retry to save ALL batch items if uniqe error is thrown
 	// i desided not to over complicate repository, because GenerateID() is in service
-	for i < 10 && err != nil && s.isDublicateIDError(err) {
+	for i < 10 && err != nil && s.isDuplicateIDError(err) {
 		// retry up to 10 times to save if id is not unique
 		for j := range sls {
 			sls[j].ID = s.GenerateID()

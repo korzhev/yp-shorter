@@ -16,30 +16,30 @@ import (
 	"github.com/korzhev/yp-shorter/internal/model"
 )
 
-type InMemoryDublicateIDError struct {
+type InMemoryDuplicateIDError struct {
 	ID string
 }
 
-func (e *InMemoryDublicateIDError) Error() string {
+func (e *InMemoryDuplicateIDError) Error() string {
 	return fmt.Sprintf("ID: %s is already used", e.ID)
 }
 
-func NewInMemoryDublicateIDError(id string) error {
-	return &InMemoryDublicateIDError{
+func NewInMemoryDuplicateIDError(id string) error {
+	return &InMemoryDuplicateIDError{
 		ID: id,
 	}
 }
 
-type InMemoryDublicateError struct {
+type InMemoryDuplicateError struct {
 	Link string
 }
 
-func (e *InMemoryDublicateError) Error() string {
+func (e *InMemoryDuplicateError) Error() string {
 	return fmt.Sprintf("Link: %s is already saved", e.Link)
 }
 
-func NewInMemoryDublicateError(link string) error {
-	return &InMemoryDublicateError{
+func NewInMemoryDuplicateError(link string) error {
+	return &InMemoryDuplicateError{
 		Link: link,
 	}
 }
@@ -71,12 +71,13 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 
 func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) {
 	s.storage.RLock()
+	defer s.storage.RUnlock()
+
 	for _, v := range s.storage.M {
 		if v.Link == link {
 			return v, nil
 		}
 	}
-	defer s.storage.RUnlock()
 
 	return model.ShortLink{}, fmt.Errorf("No link: %s", link)
 }
@@ -143,7 +144,7 @@ func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.Short
 		_, err := tx.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", item.ID, item.Link)
 		if err != nil {
 			if rerr := tx.Rollback(); rerr != nil {
-				return res, rerr
+				return nil, rerr
 			}
 			return res, err
 		}
@@ -161,11 +162,11 @@ func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
 	// ok means id is already used
 	if ok {
 		// Unique index error, like DB
-		return sl, NewInMemoryDublicateIDError(id)
+		return sl, NewInMemoryDuplicateIDError(id)
 	}
 	for _, v := range s.storage.M {
 		if v.Link == link {
-			return sl, NewInMemoryDublicateError(link)
+			return sl, NewInMemoryDuplicateError(link)
 		}
 	}
 	s.storage.M[id] = sl
@@ -222,7 +223,12 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortL
 		// ok means id is already used
 		if ok {
 			// Unique index error, like DB
-			return res, NewInMemoryDublicateIDError(item.ID)
+			return res, NewInMemoryDuplicateIDError(item.ID)
+		}
+		for _, v := range s.storage.M {
+			if v.Link == item.Link {
+				return res, NewInMemoryDuplicateError(item.Link)
+			}
 		}
 	}
 

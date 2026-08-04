@@ -20,7 +20,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestIsDublicateError(t *testing.T) {
+func TestIsDuplicateError(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
@@ -60,17 +60,17 @@ func TestIsDublicateError(t *testing.T) {
 		},
 		{
 			name: "In-memory duplicate link",
-			err:  repository.NewInMemoryDublicateError("https://example.com"),
+			err:  repository.NewInMemoryDuplicateError("https://example.com"),
 			want: true,
 		},
 		{
 			name: "Wrapped in-memory duplicate link",
-			err:  fmt.Errorf("save link: %w", repository.NewInMemoryDublicateError("https://example.com")),
+			err:  fmt.Errorf("save link: %w", repository.NewInMemoryDuplicateError("https://example.com")),
 			want: true,
 		},
 		{
 			name: "In-memory duplicate with empty link",
-			err:  repository.NewInMemoryDublicateError(""),
+			err:  repository.NewInMemoryDuplicateError(""),
 			want: false,
 		},
 		{
@@ -87,7 +87,7 @@ func TestIsDublicateError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, IsDublicateError(tt.err))
+			assert.Equal(t, tt.want, IsDuplicateError(tt.err))
 		})
 	}
 }

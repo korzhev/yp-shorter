@@ -14,7 +14,7 @@ type PingHandler struct {
 }
 
 func (p PingHandler) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	err := p.Pg.PingContext(ctx)
 	if err != nil {
@@ -22,8 +22,7 @@ func (p PingHandler) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	switch ctx.Err() {
-	case context.DeadlineExceeded:
+	if ctx.Err() != nil {
 		logger.Log.Errorw("DB ping timeout")
 	}
 	w.WriteHeader(http.StatusOK)

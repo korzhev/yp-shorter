@@ -133,7 +133,7 @@ func TestSave(t *testing.T) {
 		service := newService(mockRepo)
 		gomock.InOrder(
 			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
-				Return(model.ShortLink{}, repository.NewInMemoryDublicateIDError("abc")),
+				Return(model.ShortLink{}, repository.NewInMemoryDuplicateIDError("abc")),
 			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 				Return(model.ShortLink{ID: "abc", Link: testLink}, nil),
 		)
@@ -147,7 +147,7 @@ func TestSave(t *testing.T) {
 	t.Run("Fail after max retries", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		expectedErr := repository.NewInMemoryDublicateIDError("abc")
+		expectedErr := repository.NewInMemoryDuplicateIDError("abc")
 		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
 			Return(model.ShortLink{}, expectedErr).Times(11)
 
@@ -222,7 +222,7 @@ func TestSaveBatch(t *testing.T) {
 	t.Run("Success after ID collision", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		collisionErr := repository.NewInMemoryDublicateIDError("abc")
+		collisionErr := repository.NewInMemoryDuplicateIDError("abc")
 		gomock.InOrder(
 			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, collisionErr),
 			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(res, nil),

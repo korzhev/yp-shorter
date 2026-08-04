@@ -125,12 +125,12 @@ func TestShortLinkDB_GetByLink(t *testing.T) {
 	})
 }
 
-func TestInMemoryDublicateError(t *testing.T) {
+func TestInMemoryDuplicateError(t *testing.T) {
 	link := "https://example.com"
 
-	err := NewInMemoryDublicateError(link)
+	err := NewInMemoryDuplicateError(link)
 
-	var duplicateErr *InMemoryDublicateError
+	var duplicateErr *InMemoryDuplicateError
 	require.ErrorAs(t, err, &duplicateErr)
 	assert.Equal(t, link, duplicateErr.Link)
 	assert.EqualError(t, err, "Link: https://example.com is already saved")
