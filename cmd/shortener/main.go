@@ -3,24 +3,29 @@ package main
 import (
 	"net/http"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/go-chi/chi/v5"
+	chiMW "github.com/go-chi/chi/v5/middleware"
 	"github.com/korzhev/yp-shorter/internal/config"
+	configdb "github.com/korzhev/yp-shorter/internal/config/db"
 	"github.com/korzhev/yp-shorter/internal/handler"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
-
-	"github.com/go-chi/chi/v5"
-	chiMW "github.com/go-chi/chi/v5/middleware"
 )
 
 func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
-	var ShortLinkHandle = handler.ShortLinkHandler{
+	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
 			IDLength:    c.ShortLinkLength,
 			ShortLinkDB: db,
 		},
+	}
+	var PingHandler = handler.PingHandler{
+		Pg: db.DB,
 	}
 
 	r := chi.NewRouter()
@@ -30,14 +35,21 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 	r.Use(chiMW.RedirectSlashes)
 	r.Use(chiMW.Recoverer)
 
-	r.Get("/{id}", ShortLinkHandle.GetByIDLinkHandlerFunc)
-	r.Post("/", ShortLinkHandle.SaveLinkHandlerFunc)
-	r.Post("/api/shorten", ShortLinkHandle.APISaveLinkHandlerFunc)
+	r.Get("/{id}", ShortLinkHandler.GetByIDLinkHandlerFunc)
+	r.Post("/", ShortLinkHandler.SaveLinkHandlerFunc)
+	r.Post("/api/shorten", ShortLinkHandler.APISaveLinkHandlerFunc)
+	r.Post("/api/shorten/batch", ShortLinkHandler.APISaveLinkBatchHandlerFunc)
+	r.Get("/ping", PingHandler.PingHandlerFunc)
 	return r
 }
 
 func main() {
-	config.ParseFlags()
+	err := config.ParseFlags()
+	if err != nil {
+		logger.Log.Errorf("Error starting server: %s\n", err)
+		return
+	}
+	config.Conf.DetectStorageType()
 	logger.InitLogger(config.Conf.LogLevel)
 	defer logger.Log.Sync()
 
@@ -47,13 +59,25 @@ func main() {
 		"shortlinkLength", config.Conf.ShortLinkLength,
 		"charsetLength", len(config.Conf.ShortLinkCharset),
 		"FileStoragePath", config.Conf.FileStoragePath,
+		"StorageType", config.Conf.StorageType,
 	)
 
-	db := repository.NewShortLinkDB(config.Conf.FileStoragePath)
-	defer db.CloseFile()
+	if config.Conf.StorageType == config.Database {
+		if err := configdb.InitSchema(config.Conf.DBDSN); err != nil {
+			logger.Log.Fatalw(
+				"Failed to apply database migrations",
+				"error", err,
+			)
+		}
+
+		logger.Log.Info("Database schema is up to date")
+	}
+
+	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
+	defer db.Close()
 
 	r := RootRouter(config.Conf, db)
-	err := http.ListenAndServe(config.Conf.RunAddr, r)
+	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
 	}

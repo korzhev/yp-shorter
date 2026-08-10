@@ -2,19 +2,40 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
 type ShortLinkHandler struct {
 	ShortLinkService service.IShortLinkService
+}
+
+func IsDuplicateError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		// uniq index error
+		if pgErr.Code == "23505" && pgErr.ConstraintName == "short_links_link_uidx" {
+			return true
+		}
+	}
+	var dError *repository.InMemoryDuplicateError
+	if errors.As(err, &dError) {
+		if dError.Link != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
@@ -29,14 +50,20 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(link)
+	sl, err := s.ShortLinkService.Save(r.Context(), link)
+
+	status := http.StatusCreated
+	if IsDuplicateError(err) {
+		status = http.StatusConflict
+		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+	}
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
 	w.Write([]byte(l))
 }
@@ -47,7 +74,7 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty ID", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.GetById(id)
+	sl, err := s.ShortLinkService.GetByShort(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -73,7 +100,12 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty URL", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(link)
+	sl, err := s.ShortLinkService.Save(r.Context(), link)
+	status := http.StatusCreated
+	if IsDuplicateError(err) {
+		status = http.StatusConflict
+		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+	}
 
 	if err != nil {
 		logger.Log.Infow("Unexpected error while saving short link", "error", err)
@@ -84,6 +116,62 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 	res := model.ShortLinkResponse{
 		Result: l,
 	}
+	resp, err := json.Marshal(res)
+	if err != nil {
+		logger.Log.Infow("Enccoding response", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(resp)
+
+}
+
+func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	var req []model.ShortLinkBatchItemRequest
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		http.Error(w, "Cannot decode request JSON body", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	// i don't need DOS
+	if len(req) > 20 {
+		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)
+		http.Error(w, "Too many items in batch request", http.StatusBadRequest)
+		return
+	}
+	for _, sl := range req {
+		if sl.CorrelationID == "" || sl.OriginalURL == "" {
+			logger.Log.Infow("Empty URL", "ShortLink", sl)
+			http.Error(w, "Empty CorrelationID or OriginalURL", http.StatusBadRequest)
+			return
+		}
+	}
+
+	links, err := s.ShortLinkService.SaveBatch(r.Context(), req)
+
+	if err != nil {
+		logger.Log.Infow("Unexpected error while saving short links", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if len(links) != len(req) {
+		s := fmt.Sprintf("Different length of links %v and req %v", len(links), len(req))
+		logger.Log.Infow(s, "error", err)
+		http.Error(w, s, http.StatusBadRequest)
+		return
+	}
+	res := make([]model.ShortLinkBatchItemResponse, 0, len(links))
+	for i, l := range links {
+		res = append(res, model.ShortLinkBatchItemResponse{CorrelationID: req[i].CorrelationID, ShortURL: config.Conf.BaseResultAddr + "/" + l.ID})
+	}
+
 	resp, err := json.Marshal(res)
 	if err != nil {
 		logger.Log.Infow("Enccoding response", "error", err)

@@ -1,24 +1,18 @@
 package model
 
-import (
-	"os"
-	"sync"
-)
+import "context"
 
 type ShortLink struct {
 	ID   string
 	Link string
 }
 
-type ShortLinkStorage struct {
-	sync.RWMutex
-	M map[string]ShortLink
-	F *os.File
-}
-
 type IShortLinkRepository interface {
-	GetById(id string) (ShortLink, error)
-	Save(id string, link string) (ShortLink, error)
+	GetByShort(ctx context.Context, short string) (ShortLink, error)
+	GetByLink(ctx context.Context, link string) (ShortLink, error)
+	Save(ctx context.Context, id string, link string) (ShortLink, error)
+	SaveBatch(ctx context.Context, batch []ShortLink) ([]ShortLink, error)
+	Close() error
 }
 
 type ShortLinkRequest struct {
@@ -27,4 +21,14 @@ type ShortLinkRequest struct {
 
 type ShortLinkResponse struct {
 	Result string `json:"result"`
+}
+
+type ShortLinkBatchItemRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type ShortLinkBatchItemResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
