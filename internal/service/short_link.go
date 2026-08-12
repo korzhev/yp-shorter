@@ -3,16 +3,12 @@ package service
 import (
 	"context"
 	"errors"
-	"math/rand"
-	"time"
+	"math/rand/v2"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 )
-
-var source = rand.NewSource(time.Now().UnixNano())
-var IDSourceRand = rand.New(source)
 
 type IShortLinkService interface {
 	GenerateID() string
@@ -31,7 +27,7 @@ type ShortLinkService struct {
 func (s ShortLinkService) GenerateID() string {
 	b := make([]byte, s.IDLength)
 	for i := range b {
-		b[i] = s.Charset[IDSourceRand.Intn(len(s.Charset))]
+		b[i] = s.Charset[rand.IntN(len(s.Charset))]
 	}
 	return string(b)
 }
