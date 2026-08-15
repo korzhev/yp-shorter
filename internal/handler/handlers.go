@@ -50,12 +50,20 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(r.Context(), link)
+
+	ctx:=r.Context()
+	userID, ok := ctx.Value("UserID").(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	sl, err := s.ShortLinkService.Save(ctx, link, userID)
 
 	status := http.StatusCreated
 	if IsDuplicateError(err) {
 		status = http.StatusConflict
-		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+		sl, err = s.ShortLinkService.GetByLink(ctx, link)
 	}
 
 	if err != nil {
@@ -100,11 +108,19 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty URL", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(r.Context(), link)
+
+	ctx:=r.Context()
+	userID, ok := ctx.Value("UserID").(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	sl, err := s.ShortLinkService.Save(ctx, link, userID)
 	status := http.StatusCreated
 	if IsDuplicateError(err) {
 		status = http.StatusConflict
-		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+		sl, err = s.ShortLinkService.GetByLink(ctx, link)
 	}
 
 	if err != nil {
@@ -152,8 +168,15 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 			return
 		}
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("UserID").(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
 
-	links, err := s.ShortLinkService.SaveBatch(r.Context(), req)
+	links, err := s.ShortLinkService.SaveBatch(ctx, userID, req)
 
 	if err != nil {
 		logger.Log.Infow("Unexpected error while saving short links", "error", err)
@@ -170,6 +193,38 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 	res := make([]model.ShortLinkBatchItemResponse, 0, len(links))
 	for i, l := range links {
 		res = append(res, model.ShortLinkBatchItemResponse{CorrelationID: req[i].CorrelationID, ShortURL: config.Conf.BaseResultAddr + "/" + l.ID})
+	}
+
+	resp, err := json.Marshal(res)
+	if err != nil {
+		logger.Log.Infow("Enccoding response", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write(resp)
+}
+
+func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctx.Value("UserID").(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	links, err := s.ShortLinkService.GetByUserID(ctx, userID)
+	if err != nil {
+		logger.Log.Infow("Unexpected error while getting short link", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	res := make([]model.UserShortLinkResponse, 0, len(links))
+	for _, l := range links {
+		res = append(res, model.UserShortLinkResponse{OriginalURL: l.Link, ShortURL: config.Conf.BaseResultAddr + "/" + l.ID})
 	}
 
 	resp, err := json.Marshal(res)

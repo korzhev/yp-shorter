@@ -179,4 +179,67 @@ func TestParseFlags(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "ShortLinkLength")
 	})
+
+	t.Run("returns error for invalid token expiration", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"TOKEN_EXP_MINUTES": "not-a-number",
+		})
+
+		err := ParseFlags()
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "TokenExpMinutes")
+	})
+}
+
+func TestConfig_DetectStorageType(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   Config
+		expected StorageType
+	}{
+		{
+			name:     "in-memory storage by default",
+			config:   Config{},
+			expected: InMemory,
+		},
+		{
+			name: "file storage",
+			config: Config{
+				FileStoragePath: "/tmp/storage.json",
+			},
+			expected: File,
+		},
+		{
+			name: "database storage",
+			config: Config{
+				DBDSN: "postgres://user:pass@localhost:5432/db",
+			},
+			expected: Database,
+		},
+		{
+			name: "database takes precedence over file storage",
+			config: Config{
+				FileStoragePath: "/tmp/storage.json",
+				DBDSN:           "postgres://user:pass@localhost:5432/db",
+			},
+			expected: Database,
+		},
+		{
+			name: "resets previously detected storage type",
+			config: Config{
+				StorageType: Database,
+			},
+			expected: InMemory,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := tt.config.DetectStorageType()
+
+			assert.Equal(t, tt.expected, actual)
+			assert.Equal(t, tt.expected, tt.config.StorageType)
+		})
+	}
 }

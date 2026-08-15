@@ -40,6 +40,7 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 	r.Post("/", ShortLinkHandler.SaveLinkHandlerFunc)
 	r.Post("/api/shorten", ShortLinkHandler.APISaveLinkHandlerFunc)
 	r.Post("/api/shorten/batch", ShortLinkHandler.APISaveLinkBatchHandlerFunc)
+	r.Get("/api/user/urls", ShortLinkHandler.APIGetLinksByUserIDHandlerFunc)
 	r.Get("/ping", PingHandler.PingHandlerFunc)
 	return r
 }

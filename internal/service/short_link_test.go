@@ -92,10 +92,43 @@ func TestGetByLink(t *testing.T) {
 	})
 }
 
+func TestGetByUserID(t *testing.T) {
+	ctx := context.Background()
+	userID := 42
+	expected := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first", UserID: userID},
+		{ID: "second-id", Link: "https://example.com/second", UserID: userID},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		mockRepo.EXPECT().GetByUserID(ctx, userID).Return(expected, nil)
+
+		actual, err := service.GetByUserID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := ShortLinkService{ShortLinkDB: mockRepo}
+		expectedErr := errors.New("repository error")
+		mockRepo.EXPECT().GetByUserID(ctx, userID).Return(nil, expectedErr)
+
+		actual, err := service.GetByUserID(ctx, userID)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Nil(t, actual)
+	})
+}
+
 func TestSave(t *testing.T) {
 	ctx := context.Background()
 	const charset = "abc"
 	const idLength = 3
+	const userID = 42
 	testLink := "https://example.com"
 	idMatcher := gomock.Cond(func(id string) bool {
 		if len(id) != idLength {
@@ -119,39 +152,41 @@ func TestSave(t *testing.T) {
 	t.Run("Success on first attempt", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
-			Return(model.ShortLink{ID: "abc", Link: testLink}, nil)
+		mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
+			Return(model.ShortLink{ID: "abc", Link: testLink, UserID: userID}, nil)
 
-		res, err := service.Save(ctx, testLink)
+		res, err := service.Save(ctx, testLink, userID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, testLink, res.Link)
+		assert.Equal(t, userID, res.UserID)
 	})
 
 	t.Run("Success after retry", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		gomock.InOrder(
-			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
 				Return(model.ShortLink{}, repository.NewInMemoryDuplicateIDError("abc")),
-			mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
-				Return(model.ShortLink{ID: "abc", Link: testLink}, nil),
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
+				Return(model.ShortLink{ID: "abc", Link: testLink, UserID: userID}, nil),
 		)
 
-		res, err := service.Save(ctx, testLink)
+		res, err := service.Save(ctx, testLink, userID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, testLink, res.Link)
+		assert.Equal(t, userID, res.UserID)
 	})
 
 	t.Run("Fail after max retries", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		expectedErr := repository.NewInMemoryDuplicateIDError("abc")
-		mockRepo.EXPECT().Save(ctx, idMatcher, testLink).
+		mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
 			Return(model.ShortLink{}, expectedErr).Times(11)
 
-		res, err := service.Save(ctx, testLink)
+		res, err := service.Save(ctx, testLink, userID)
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Equal(t, model.ShortLink{}, res)
@@ -162,13 +197,14 @@ func TestSaveBatch(t *testing.T) {
 	ctx := context.Background()
 	const charset = "abc"
 	const idLength = 3
+	const userID = 42
 	batch := []model.ShortLinkBatchItemRequest{
 		{CorrelationID: "first-id", OriginalURL: "http://first"},
 		{CorrelationID: "second-id", OriginalURL: "http://second"},
 	}
 	res := []model.ShortLink{
-		{ID: "first", Link: "http://f"},
-		{ID: "second", Link: "http://s"},
+		{ID: "first", Link: "http://f", UserID: userID},
+		{ID: "second", Link: "http://s", UserID: userID},
 	}
 	batchMatcher := gomock.Cond(func(links []model.ShortLink) bool {
 		if len(links) != len(batch) {
@@ -199,9 +235,9 @@ func TestSaveBatch(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
-		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(res, nil)
+		mockRepo.EXPECT().SaveBatch(ctx, userID, batchMatcher).Return(res, nil)
 
-		actual, err := service.SaveBatch(ctx, batch)
+		actual, err := service.SaveBatch(ctx, userID, batch)
 
 		assert.NoError(t, err)
 		assert.Equal(t, res, actual)
@@ -211,9 +247,9 @@ func TestSaveBatch(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
 		expectedErr := errors.New("batch save failed")
-		mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, expectedErr)
+		mockRepo.EXPECT().SaveBatch(ctx, userID, batchMatcher).Return(nil, expectedErr)
 
-		actual, err := service.SaveBatch(ctx, batch)
+		actual, err := service.SaveBatch(ctx, userID, batch)
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Nil(t, actual)
@@ -224,11 +260,11 @@ func TestSaveBatch(t *testing.T) {
 		service := newService(mockRepo)
 		collisionErr := repository.NewInMemoryDuplicateIDError("abc")
 		gomock.InOrder(
-			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(nil, collisionErr),
-			mockRepo.EXPECT().SaveBatch(ctx, batchMatcher).Return(res, nil),
+			mockRepo.EXPECT().SaveBatch(ctx, userID, batchMatcher).Return(nil, collisionErr),
+			mockRepo.EXPECT().SaveBatch(ctx, userID, batchMatcher).Return(res, nil),
 		)
 
-		actual, err := service.SaveBatch(ctx, batch)
+		actual, err := service.SaveBatch(ctx, userID, batch)
 
 		assert.NoError(t, err)
 		assert.Equal(t, res, actual)

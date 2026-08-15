@@ -125,6 +125,29 @@ func TestShortLinkDB_GetByLink(t *testing.T) {
 	})
 }
 
+func TestShortLinkDB_GetByUserID(t *testing.T) {
+	ctx := context.Background()
+	userID := 42
+	expected := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first", UserID: userID},
+		{ID: "second-id", Link: "https://example.com/second", UserID: userID},
+	}
+	db := NewShortLinkDB("", "", config.InMemory)
+	for _, sl := range expected {
+		db.storage.M[sl.ID] = sl
+	}
+	db.storage.M["another-user-id"] = model.ShortLink{
+		ID:     "another-user-id",
+		Link:   "https://example.com/another-user",
+		UserID: userID + 1,
+	}
+
+	actual, err := db.GetByUserID(ctx, userID)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, expected, actual)
+}
+
 func TestInMemoryDuplicateError(t *testing.T) {
 	link := "https://example.com"
 
@@ -138,6 +161,7 @@ func TestInMemoryDuplicateError(t *testing.T) {
 
 func TestShortLinkDB_Save(t *testing.T) {
 	ctx := context.Background()
+	userID := 42
 	file, err := os.OpenFile(
 		filepath.Join(t.TempDir(), "storage.json"),
 		os.O_CREATE|os.O_RDWR,
@@ -157,10 +181,11 @@ func TestShortLinkDB_Save(t *testing.T) {
 	link := "https://new-link.com"
 
 	t.Run("Success", func(t *testing.T) {
-		result, err := db.Save(ctx, id, link)
+		result, err := db.Save(ctx, id, link, userID)
 		assert.NoError(t, err)
 		assert.Equal(t, id, result.ID)
 		assert.Equal(t, link, result.Link)
+		assert.Equal(t, userID, result.UserID)
 
 		// Verify it's actually in storage
 		stored, ok := db.storage.M[id]
@@ -180,7 +205,7 @@ func TestShortLinkDB_Save(t *testing.T) {
 
 	t.Run("AlreadyExists", func(t *testing.T) {
 		// Attempt to save the same ID again
-		_, err := db.Save(ctx, id, "https://another-link.com")
+		_, err := db.Save(ctx, id, "https://another-link.com", userID)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is already used")
 	})
@@ -188,21 +213,26 @@ func TestShortLinkDB_Save(t *testing.T) {
 
 func TestShortLinkDB_SaveBatch(t *testing.T) {
 	ctx := context.Background()
+	userID := 42
 	batch := []model.ShortLink{
 		{ID: "first-id", Link: "https://example.com/first"},
 		{ID: "second-id", Link: "https://example.com/second"},
+	}
+	expected := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first", UserID: userID},
+		{ID: "second-id", Link: "https://example.com/second", UserID: userID},
 	}
 
 	t.Run("saves batch in memory", func(t *testing.T) {
 		db := NewShortLinkDB("", "", config.InMemory)
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		require.NoError(t, err)
-		assert.Equal(t, batch, actual)
+		assert.Equal(t, expected, actual)
 		assert.Equal(t, InMemoryStorage{
-			"first-id":  batch[0],
-			"second-id": batch[1],
+			"first-id":  expected[0],
+			"second-id": expected[1],
 		}, db.storage.M)
 	})
 
@@ -210,7 +240,7 @@ func TestShortLinkDB_SaveBatch(t *testing.T) {
 		db := NewShortLinkDB("", "", config.InMemory)
 		db.storage.M[batch[0].ID] = batch[0]
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ID: first-id is already used")
@@ -225,7 +255,7 @@ func TestShortLinkDB_SaveBatch(t *testing.T) {
 		}
 		db.storage.M[existing.ID] = existing
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ID: second-id is already used")
@@ -241,10 +271,10 @@ func TestShortLinkDB_SaveBatch(t *testing.T) {
 			require.NoError(t, db.Close())
 		})
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		require.NoError(t, err)
-		assert.Equal(t, batch, actual)
+		assert.Equal(t, expected, actual)
 
 		data, err := os.ReadFile(filePath)
 		require.NoError(t, err)
@@ -256,11 +286,16 @@ func TestShortLinkDB_SaveBatch(t *testing.T) {
 
 func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 	ctx := context.Background()
+	userID := 42
 	batch := []model.ShortLink{
 		{ID: "first-id", Link: "https://example.com/first"},
 		{ID: "second-id", Link: "https://example.com/second"},
 	}
-	insertQuery := `INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`
+	expected := []model.ShortLink{
+		{ID: "first-id", Link: "https://example.com/first", UserID: userID},
+		{ID: "second-id", Link: "https://example.com/second", UserID: userID},
+	}
+	insertQuery := `INSERT INTO short_links \(short, link, user_id\) VALUES \(\$1, \$2, \$3\)`
 
 	newDB := func(t *testing.T) (*ShortLinkDB, sqlmock.Sqlmock) {
 		t.Helper()
@@ -279,15 +314,15 @@ func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 		mock.ExpectBegin()
 		for _, item := range batch {
 			mock.ExpectExec(insertQuery).
-				WithArgs(item.ID, item.Link).
+				WithArgs(item.ID, item.Link, userID).
 				WillReturnResult(sqlmock.NewResult(1, 1))
 		}
 		mock.ExpectCommit()
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		require.NoError(t, err)
-		assert.Equal(t, batch, actual)
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("returns begin error", func(t *testing.T) {
@@ -295,7 +330,7 @@ func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 		expectedErr := errors.New("begin failed")
 		mock.ExpectBegin().WillReturnError(expectedErr)
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		assert.ErrorIs(t, err, expectedErr)
 		assert.Empty(t, actual)
@@ -306,17 +341,17 @@ func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 		expectedErr := errors.New("insert failed")
 		mock.ExpectBegin()
 		mock.ExpectExec(insertQuery).
-			WithArgs(batch[0].ID, batch[0].Link).
+			WithArgs(batch[0].ID, batch[0].Link, userID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectExec(insertQuery).
-			WithArgs(batch[1].ID, batch[1].Link).
+			WithArgs(batch[1].ID, batch[1].Link, userID).
 			WillReturnError(expectedErr)
 		mock.ExpectRollback()
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		assert.ErrorIs(t, err, expectedErr)
-		assert.Equal(t, batch[:1], actual)
+		assert.Equal(t, expected[:1], actual)
 	})
 
 	t.Run("returns commit error", func(t *testing.T) {
@@ -325,15 +360,15 @@ func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 		mock.ExpectBegin()
 		for _, item := range batch {
 			mock.ExpectExec(insertQuery).
-				WithArgs(item.ID, item.Link).
+				WithArgs(item.ID, item.Link, userID).
 				WillReturnResult(sqlmock.NewResult(1, 1))
 		}
 		mock.ExpectCommit().WillReturnError(expectedErr)
 
-		actual, err := db.SaveBatch(ctx, batch)
+		actual, err := db.SaveBatch(ctx, userID, batch)
 
 		assert.ErrorIs(t, err, expectedErr)
-		assert.Equal(t, batch, actual)
+		assert.Equal(t, expected, actual)
 	})
 }
 
@@ -423,6 +458,32 @@ func TestShortLinkDB_Database(t *testing.T) {
 		assert.Equal(t, model.ShortLink{}, actual)
 	})
 
+	t.Run("gets links by user ID", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		userID := 42
+		expected := []model.ShortLink{
+			{ID: "first-id", Link: "https://example.com/first", UserID: userID},
+			{ID: "second-id", Link: "https://example.com/second", UserID: userID},
+		}
+		mock.ExpectQuery(`SELECT short, link, user_id FROM short_links WHERE user_id = \$1 LIMIT 1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"short", "link", "user_id"}).
+				AddRow(expected[0].ID, expected[0].Link, expected[0].UserID).
+				AddRow(expected[1].ID, expected[1].Link, expected[1].UserID))
+		mock.ExpectClose()
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		actual, err := db.GetByUserID(ctx, userID)
+
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
 	t.Run("saves a link", func(t *testing.T) {
 		sqlDB, mock, err := sqlmock.New()
 		require.NoError(t, err)
@@ -431,16 +492,17 @@ func TestShortLinkDB_Database(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 
-		mock.ExpectExec(`INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`).
-			WithArgs("abcde", "https://example.com").
+		userID := 42
+		mock.ExpectExec(`INSERT INTO short_links \(short, link, user_id\) VALUES \(\$1, \$2, \$3\)`).
+			WithArgs("abcde", "https://example.com", userID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.Save(ctx, "abcde", "https://example.com")
+		actual, err := db.Save(ctx, "abcde", "https://example.com", userID)
 
 		require.NoError(t, err)
-		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com", UserID: userID}, actual)
 	})
 
 	t.Run("returns insert error", func(t *testing.T) {
@@ -451,17 +513,18 @@ func TestShortLinkDB_Database(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 		expectedErr := errors.New("insert failed")
+		userID := 42
 
-		mock.ExpectExec(`INSERT INTO short_links \(short, link\) VALUES \(\$1, \$2\)`).
-			WithArgs("abcde", "https://example.com").
+		mock.ExpectExec(`INSERT INTO short_links \(short, link, user_id\) VALUES \(\$1, \$2, \$3\)`).
+			WithArgs("abcde", "https://example.com", userID).
 			WillReturnError(expectedErr)
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
-		actual, err := db.Save(ctx, "abcde", "https://example.com")
+		actual, err := db.Save(ctx, "abcde", "https://example.com", userID)
 
 		assert.ErrorIs(t, err, expectedErr)
-		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com", UserID: userID}, actual)
 	})
 }
 
@@ -484,6 +547,7 @@ func TestShortLinkDB_Close(t *testing.T) {
 
 func TestShortLinkDB_SaveFileErrors(t *testing.T) {
 	ctx := context.Background()
+	userID := 42
 	file, err := os.CreateTemp(t.TempDir(), "closed-storage-*.json")
 	require.NoError(t, err)
 	require.NoError(t, file.Close())
@@ -493,11 +557,11 @@ func TestShortLinkDB_SaveFileErrors(t *testing.T) {
 		storageType: config.File,
 	}
 
-	actual, err := db.Save(ctx, "abcde", "https://example.com")
+	actual, err := db.Save(ctx, "abcde", "https://example.com", userID)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Can't clean storage")
-	assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+	assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com", UserID: userID}, actual)
 }
 
 func TestNewShortLinkDB_Database(t *testing.T) {

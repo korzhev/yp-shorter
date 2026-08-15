@@ -62,6 +62,11 @@ func GetUserID(tokenString string, secret string) int {
 		return 0
 	}
 
+	if claims.UserID < 1 || claims.UserID > 100 {
+		logger.Log.Infow("Invalid UserID", "user_id", claims.UserID)
+		return 0
+	}
+
 	return claims.UserID
 }
 
