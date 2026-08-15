@@ -1,0 +1,107 @@
+package middleware
+
+import (
+	"context"
+	"fmt"
+	"math/rand/v2"
+	"net/http"
+	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/korzhev/yp-shorter/internal/config"
+	"github.com/korzhev/yp-shorter/internal/logger"
+)
+
+type Claims struct {
+	jwt.RegisteredClaims
+	UserID int `json:"user_id"`
+}
+
+type AuthMiddleware func(next http.Handler) http.Handler
+
+func BuildJWTString(d time.Duration, id int, secret string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(d)),
+		},
+		UserID: id,
+	})
+
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func GetUserID(tokenString string, secret string) int {
+	claims := &Claims{}
+	// не понял когда указаль передавать, а когда нет
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(t *jwt.Token) (interface{}, error) {
+			if t.Method != jwt.SigningMethodHS256 {
+				return nil, fmt.Errorf(
+					"unexpected signing method: %s",
+					t.Method.Alg(),
+				)
+			}
+			return []byte(secret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil {
+		logger.Log.Infow("Error in token", "error", err, "token", tokenString)
+		return 0
+	}
+
+	if !token.Valid {
+		logger.Log.Infow("Invalid token", "token", tokenString)
+		return 0
+	}
+
+	if claims.UserID < 1 || claims.UserID > 100 {
+		logger.Log.Infow("Invalid UserID", "user_id", claims.UserID)
+		return 0
+	}
+
+	return claims.UserID
+}
+
+func NewAuthMiddleware(c config.Config) AuthMiddleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie("Auth")
+			// no cookie
+			if err != nil {
+				// random user id 1-100
+				newId := rand.IntN(100) + 1
+				d := time.Minute * time.Duration(c.TokenExpMinutes)
+				t, e := BuildJWTString(d, newId, c.TokenSecret)
+				if e != nil {
+					http.Error(w, e.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				http.SetCookie(w, &http.Cookie{
+					Name:    "Auth",
+					Value:   t,
+					Expires: time.Now().Add(d),
+				})
+				ctx := context.WithValue(r.Context(), "UserID", newId)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			id := GetUserID(cookie.Value, c.TokenSecret)
+			if id == 0 {
+				http.Error(w, "Invalid UserID in Cookie", http.StatusUnauthorized)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), "UserID", id)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}

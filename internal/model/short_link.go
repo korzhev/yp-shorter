@@ -3,15 +3,17 @@ package model
 import "context"
 
 type ShortLink struct {
-	ID   string
-	Link string
+	ID     string
+	Link   string
+	UserID int
 }
 
 type IShortLinkRepository interface {
 	GetByShort(ctx context.Context, short string) (ShortLink, error)
 	GetByLink(ctx context.Context, link string) (ShortLink, error)
-	Save(ctx context.Context, id string, link string) (ShortLink, error)
-	SaveBatch(ctx context.Context, batch []ShortLink) ([]ShortLink, error)
+	GetByUserID(ctx context.Context, userID int) ([]ShortLink, error)
+	Save(ctx context.Context, id string, link string, userID int) (ShortLink, error)
+	SaveBatch(ctx context.Context, userID int, batch []ShortLink) ([]ShortLink, error)
 	Close() error
 }
 
@@ -21,6 +23,11 @@ type ShortLinkRequest struct {
 
 type ShortLinkResponse struct {
 	Result string `json:"result"`
+}
+
+type UserShortLinkResponse struct {
+	ShortURL string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
 }
 
 type ShortLinkBatchItemRequest struct {

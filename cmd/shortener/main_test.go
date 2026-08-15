@@ -26,6 +26,8 @@ func TestRootRouter(t *testing.T) {
 		BaseResultAddr:   baseResultAddr,
 		ShortLinkCharset: config.DefaultCharset,
 		ShortLinkLength:  6,
+		TokenExpMinutes:  5,
+		TokenSecret:      "router-test-secret",
 	}
 	oldConfig := config.Conf
 	config.Conf = c
@@ -100,6 +102,35 @@ func TestRootRouter(t *testing.T) {
 		assert.Equal(t, "second", result[1].CorrelationID)
 		assert.True(t, strings.HasPrefix(result[0].ShortURL, baseResultAddr+"/"))
 		assert.True(t, strings.HasPrefix(result[1].ShortURL, baseResultAddr+"/"))
+	})
+
+	t.Run("returns links created by authenticated user", func(t *testing.T) {
+		db := repository.NewShortLinkDB("", "", config.InMemory)
+		router := RootRouter(c, db)
+		originalURL := "https://example.com/user-link"
+
+		createRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
+		createResponse := httptest.NewRecorder()
+		router.ServeHTTP(createResponse, createRequest)
+
+		require.Equal(t, http.StatusCreated, createResponse.Code)
+		shortURL := createResponse.Body.String()
+		cookies := createResponse.Result().Cookies()
+		require.Len(t, cookies, 1)
+		require.Equal(t, "Auth", cookies[0].Name)
+
+		listRequest := httptest.NewRequest(http.MethodGet, "/api/user/urls", nil)
+		listRequest.AddCookie(cookies[0])
+		listResponse := httptest.NewRecorder()
+		router.ServeHTTP(listResponse, listRequest)
+
+		require.Equal(t, http.StatusOK, listResponse.Code)
+		assert.Equal(t, "application/json", listResponse.Header().Get("Content-Type"))
+		var result []model.UserShortLinkResponse
+		require.NoError(t, json.Unmarshal(listResponse.Body.Bytes(), &result))
+		require.Len(t, result, 1)
+		assert.Equal(t, originalURL, result[0].OriginalURL)
+		assert.Equal(t, shortURL, result[0].ShortURL)
 	})
 
 	t.Run("routes database ping", func(t *testing.T) {

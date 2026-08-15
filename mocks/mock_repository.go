@@ -85,32 +85,47 @@ func (mr *MockIShortLinkRepositoryMockRecorder) GetByShort(ctx, short any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByShort", reflect.TypeOf((*MockIShortLinkRepository)(nil).GetByShort), ctx, short)
 }
 
-// Save mocks base method.
-func (m *MockIShortLinkRepository) Save(ctx context.Context, id, link string) (model.ShortLink, error) {
+// GetByUserID mocks base method.
+func (m *MockIShortLinkRepository) GetByUserID(ctx context.Context, userID int) ([]model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Save", ctx, id, link)
+	ret := m.ctrl.Call(m, "GetByUserID", ctx, userID)
+	ret0, _ := ret[0].([]model.ShortLink)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUserID indicates an expected call of GetByUserID.
+func (mr *MockIShortLinkRepositoryMockRecorder) GetByUserID(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUserID", reflect.TypeOf((*MockIShortLinkRepository)(nil).GetByUserID), ctx, userID)
+}
+
+// Save mocks base method.
+func (m *MockIShortLinkRepository) Save(ctx context.Context, id, link string, userID int) (model.ShortLink, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Save", ctx, id, link, userID)
 	ret0, _ := ret[0].(model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Save indicates an expected call of Save.
-func (mr *MockIShortLinkRepositoryMockRecorder) Save(ctx, id, link any) *gomock.Call {
+func (mr *MockIShortLinkRepositoryMockRecorder) Save(ctx, id, link, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkRepository)(nil).Save), ctx, id, link)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockIShortLinkRepository)(nil).Save), ctx, id, link, userID)
 }
 
 // SaveBatch mocks base method.
-func (m *MockIShortLinkRepository) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+func (m *MockIShortLinkRepository) SaveBatch(ctx context.Context, userID int, batch []model.ShortLink) ([]model.ShortLink, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveBatch", ctx, batch)
+	ret := m.ctrl.Call(m, "SaveBatch", ctx, userID, batch)
 	ret0, _ := ret[0].([]model.ShortLink)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SaveBatch indicates an expected call of SaveBatch.
-func (mr *MockIShortLinkRepositoryMockRecorder) SaveBatch(ctx, batch any) *gomock.Call {
+func (mr *MockIShortLinkRepositoryMockRecorder) SaveBatch(ctx, userID, batch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveBatch", reflect.TypeOf((*MockIShortLinkRepository)(nil).SaveBatch), ctx, batch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveBatch", reflect.TypeOf((*MockIShortLinkRepository)(nil).SaveBatch), ctx, userID, batch)
 }
