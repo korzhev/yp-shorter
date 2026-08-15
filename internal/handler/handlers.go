@@ -51,7 +51,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ctx:=r.Context()
+	ctx := r.Context()
 	userID, ok := ctx.Value("UserID").(int)
 	if !ok {
 		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
@@ -109,7 +109,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		return
 	}
 
-	ctx:=r.Context()
+	ctx := r.Context()
 	userID, ok := ctx.Value("UserID").(int)
 	if !ok {
 		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
@@ -235,6 +235,10 @@ func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	status := http.StatusOK
+	if len(links) == 0 {
+		status = http.StatusNoContent
+	}
+	w.WriteHeader(status)
 	w.Write(resp)
 }

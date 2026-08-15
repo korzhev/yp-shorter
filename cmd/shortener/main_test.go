@@ -124,7 +124,7 @@ func TestRootRouter(t *testing.T) {
 		listResponse := httptest.NewRecorder()
 		router.ServeHTTP(listResponse, listRequest)
 
-		require.Equal(t, http.StatusCreated, listResponse.Code)
+		require.Equal(t, http.StatusOK, listResponse.Code)
 		assert.Equal(t, "application/json", listResponse.Header().Get("Content-Type"))
 		var result []model.UserShortLinkResponse
 		require.NoError(t, json.Unmarshal(listResponse.Body.Bytes(), &result))

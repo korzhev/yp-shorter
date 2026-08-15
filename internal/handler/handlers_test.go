@@ -496,12 +496,25 @@ func TestAPIGetLinksByUserIDHandlerFunc(t *testing.T) {
 
 		h.APIGetLinksByUserIDHandlerFunc(rr, req)
 
-		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 		assert.JSONEq(t, `[
 			{"short_url":"http://localhost:8080/first-id","original_url":"https://example.com/first"},
 			{"short_url":"http://localhost:8080/second-id","original_url":"https://example.com/second"}
 		]`, rr.Body.String())
+	})
+
+	t.Run("Empty Result", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().GetByUserID(gomock.Any(), testUserID).Return([]model.ShortLink{}, nil)
+
+		req := withUserID(httptest.NewRequest(http.MethodGet, "/api/user/urls", nil))
+		rr := httptest.NewRecorder()
+
+		h.APIGetLinksByUserIDHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusNoContent, rr.Code)
 	})
 
 	t.Run("Service Error", func(t *testing.T) {
