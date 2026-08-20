@@ -87,6 +87,10 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if sl.Deleted == true {
+		w.WriteHeader(http.StatusGone)
+		return
+	}
 
 	w.Header().Set("Location", sl.Link)
 	w.WriteHeader(http.StatusTemporaryRedirect)
@@ -241,4 +245,39 @@ func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, 
 	}
 	w.WriteHeader(status)
 	w.Write(resp)
+}
+
+func (s ShortLinkHandler) APIDeleteLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	var req []string
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		http.Error(w, "Cannot decode request JSON body", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	// i don't need DOS
+	if len(req) > 200 {
+		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)
+		http.Error(w, "Too many items in batch request", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("UserID").(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+
+	err := s.ShortLinkService.DeleteBatch(ctx, userID, req)
+
+	if err != nil {
+		logger.Log.Infow("Unexpected error while deleting short links", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

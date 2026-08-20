@@ -3,9 +3,10 @@ package model
 import "context"
 
 type ShortLink struct {
-	ID     string
-	Link   string
-	UserID int
+	ID      string
+	Link    string
+	UserID  int
+	Deleted bool
 }
 
 type IShortLinkRepository interface {
@@ -14,6 +15,7 @@ type IShortLinkRepository interface {
 	GetByUserID(ctx context.Context, userID int) ([]ShortLink, error)
 	Save(ctx context.Context, id string, link string, userID int) (ShortLink, error)
 	SaveBatch(ctx context.Context, userID int, batch []ShortLink) ([]ShortLink, error)
+	DeleteBatch(ctx context.Context, userID int, batch []string) error
 	Close() error
 }
 
@@ -26,7 +28,7 @@ type ShortLinkResponse struct {
 }
 
 type UserShortLinkResponse struct {
-	ShortURL string `json:"short_url"`
+	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
 

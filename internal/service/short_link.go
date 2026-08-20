@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 )
@@ -17,12 +18,36 @@ type IShortLinkService interface {
 	GetByUserID(ctx context.Context, userID int) ([]model.ShortLink, error)
 	Save(ctx context.Context, link string, userID int) (model.ShortLink, error)
 	SaveBatch(ctx context.Context, userID int, batch []model.ShortLinkBatchItemRequest) ([]model.ShortLink, error)
+	DeleteBatch(ctx context.Context, userID int, batch []string) error
+}
+
+// Semaphore for DB
+type Semaphore struct {
+	semaCh chan struct{}
+}
+
+// maxReq - maximum parallel request for db
+func NewSemaphore(maxReq int) *Semaphore {
+	return &Semaphore{
+		semaCh: make(chan struct{}, maxReq),
+	}
+}
+
+// when goroutine starts send semaChto channel
+func (s *Semaphore) Acquire() {
+	s.semaCh <- struct{}{}
+}
+
+// when goroutine ends remove semaCh from channel
+func (s *Semaphore) Release() {
+	<-s.semaCh
 }
 
 type ShortLinkService struct {
 	Charset     string
 	IDLength    int
 	ShortLinkDB model.IShortLinkRepository
+	DBSemaphore *Semaphore
 }
 
 func (s ShortLinkService) GenerateID() string {
@@ -97,4 +122,28 @@ func (s ShortLinkService) SaveBatch(ctx context.Context, userID int, batch []mod
 		i++
 	}
 	return res, err
+}
+
+func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs []string) error {
+	// max number of ids in one batch sql request
+	batchSize := 4
+	l := len(shortIDs)
+	// number of goruties
+	w := l / batchSize
+	if l%batchSize != 0 {
+		w++
+	}
+	// run some gorutines
+	for i := 0; i < w; i++ {
+		go func() {
+			s.DBSemaphore.Acquire()
+			defer s.DBSemaphore.Release()
+			j:= i*batchSize
+			k := min(j + batchSize, l)
+			// task says that there is no need to notify
+			err := s.ShortLinkDB.DeleteBatch(ctx, userID, shortIDs[j:k])
+			logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		}() // no need to wait for gorutines
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type stringSliceValueConverter struct{}
+
+func (stringSliceValueConverter) ConvertValue(value any) (driver.Value, error) {
+	if stringSlice, ok := value.([]string); ok {
+		return fmt.Sprint(stringSlice), nil
+	}
+
+	return driver.DefaultParameterConverter.ConvertValue(value)
+}
 
 func TestNewShortLinkDB(t *testing.T) {
 	ctx := context.Background()
@@ -372,6 +383,113 @@ func TestShortLinkDB_SaveBatchDatabase(t *testing.T) {
 	})
 }
 
+func TestShortLinkDB_DeleteBatch(t *testing.T) {
+	ctx := context.Background()
+	userID := 42
+	batch := []string{"first-id", "second-id", "another-user-id", "missing-id"}
+	initial := InMemoryStorage{
+		"first-id": {
+			ID:     "first-id",
+			Link:   "https://example.com/first",
+			UserID: userID,
+		},
+		"second-id": {
+			ID:     "second-id",
+			Link:   "https://example.com/second",
+			UserID: userID,
+		},
+		"another-user-id": {
+			ID:     "another-user-id",
+			Link:   "https://example.com/another-user",
+			UserID: userID + 1,
+		},
+		"untouched-id": {
+			ID:     "untouched-id",
+			Link:   "https://example.com/untouched",
+			UserID: userID,
+		},
+	}
+	expected := InMemoryStorage{
+		"another-user-id": initial["another-user-id"],
+		"untouched-id":    initial["untouched-id"],
+	}
+
+	cloneStorage := func(source InMemoryStorage) InMemoryStorage {
+		clone := make(InMemoryStorage, len(source))
+		for id, shortLink := range source {
+			clone[id] = shortLink
+		}
+		return clone
+	}
+
+	t.Run("deletes only links owned by user from memory", func(t *testing.T) {
+		db := NewShortLinkDB("", "", config.InMemory)
+		db.storage.M = cloneStorage(initial)
+
+		err := db.DeleteBatch(ctx, userID, batch)
+
+		require.NoError(t, err)
+		assert.Equal(t, expected, db.storage.M)
+	})
+
+	t.Run("deletes links and persists file storage", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "storage.json")
+		db := NewShortLinkDB(filePath, "", config.File)
+		db.storage.M = cloneStorage(initial)
+		t.Cleanup(func() {
+			require.NoError(t, db.Close())
+		})
+
+		err := db.DeleteBatch(ctx, userID, batch)
+
+		require.NoError(t, err)
+		assert.Equal(t, expected, db.storage.M)
+
+		data, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		var persisted InMemoryStorage
+		require.NoError(t, json.Unmarshal(data, &persisted))
+		assert.Equal(t, expected, persisted)
+	})
+
+	t.Run("marks database links as deleted", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New(sqlmock.ValueConverterOption(stringSliceValueConverter{}))
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			mock.ExpectClose()
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		mock.ExpectExec(`UPDATE short_links SET deleted = TRUE WHERE user_id = \$1 AND short = ANY\(\$2\)`).
+			WithArgs(userID, fmt.Sprint(batch)).
+			WillReturnResult(sqlmock.NewResult(0, 2))
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		err = db.DeleteBatch(ctx, userID, batch)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("returns database error", func(t *testing.T) {
+		sqlDB, mock, err := sqlmock.New(sqlmock.ValueConverterOption(stringSliceValueConverter{}))
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			mock.ExpectClose()
+			require.NoError(t, sqlDB.Close())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+		expectedErr := errors.New("update failed")
+		mock.ExpectExec(`UPDATE short_links SET deleted = TRUE WHERE user_id = \$1 AND short = ANY\(\$2\)`).
+			WithArgs(userID, fmt.Sprint(batch)).
+			WillReturnError(expectedErr)
+
+		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
+		err = db.DeleteBatch(ctx, userID, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+	})
+}
+
 func TestShortLinkDB_Database(t *testing.T) {
 	ctx := context.Background()
 
@@ -383,17 +501,17 @@ func TestShortLinkDB_Database(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 		// ExpectQuery uses strings as regexp, so `$`,`(`,`)` should be quoted
-		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE short = \$1 LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 LIMIT 1`).
 			WithArgs("abcde").
-			WillReturnRows(sqlmock.NewRows([]string{"short", "link"}).
-				AddRow("abcde", "https://example.com"))
+			WillReturnRows(sqlmock.NewRows([]string{"short", "link", "deleted"}).
+				AddRow("abcde", "https://example.com", true))
 		mock.ExpectClose()
 
 		db := &ShortLinkDB{DB: sqlDB, storageType: config.Database}
 		actual, err := db.GetByShort(ctx, "abcde")
 
 		require.NoError(t, err)
-		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com"}, actual)
+		assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com", Deleted: true}, actual)
 	})
 
 	t.Run("returns query error", func(t *testing.T) {
@@ -405,7 +523,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		})
 		expectedErr := errors.New("query failed")
 
-		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE short = \$1 LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 LIMIT 1`).
 			WithArgs("abcde").
 			WillReturnError(expectedErr)
 		mock.ExpectClose()

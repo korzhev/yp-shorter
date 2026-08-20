@@ -16,12 +16,13 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
-func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
+func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
 			IDLength:    c.ShortLinkLength,
 			ShortLinkDB: db,
+			DBSemaphore: s,
 		},
 	}
 	var PingHandler = handler.PingHandler{
@@ -41,6 +42,7 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB) chi.Router {
 	r.Post("/api/shorten", ShortLinkHandler.APISaveLinkHandlerFunc)
 	r.Post("/api/shorten/batch", ShortLinkHandler.APISaveLinkBatchHandlerFunc)
 	r.Get("/api/user/urls", ShortLinkHandler.APIGetLinksByUserIDHandlerFunc)
+	r.Delete("/api/user/urls", ShortLinkHandler.APIDeleteLinkBatchHandlerFunc)
 	r.Get("/ping", PingHandler.PingHandlerFunc)
 	return r
 }
@@ -78,7 +80,8 @@ func main() {
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
 	defer db.Close()
 
-	r := RootRouter(config.Conf, db)
+	s := service.NewSemaphore(2)
+	r := RootRouter(config.Conf, db, s)
 	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)

@@ -55,6 +55,20 @@ func (mr *MockIShortLinkRepositoryMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockIShortLinkRepository)(nil).Close))
 }
 
+// DeleteBatch mocks base method.
+func (m *MockIShortLinkRepository) DeleteBatch(ctx context.Context, userID int, batch []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBatch", ctx, userID, batch)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBatch indicates an expected call of DeleteBatch.
+func (mr *MockIShortLinkRepositoryMockRecorder) DeleteBatch(ctx, userID, batch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBatch", reflect.TypeOf((*MockIShortLinkRepository)(nil).DeleteBatch), ctx, userID, batch)
+}
+
 // GetByLink mocks base method.
 func (m *MockIShortLinkRepository) GetByLink(ctx context.Context, link string) (model.ShortLink, error) {
 	m.ctrl.T.Helper()

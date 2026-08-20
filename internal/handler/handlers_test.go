@@ -150,6 +150,26 @@ func TestSaveLinkHandler(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "internal error")
 	})
 
+	t.Run("Duplicate Link", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		link := "https://example.com"
+		shortLink := model.ShortLink{ID: "existing-id", Link: link, UserID: testUserID}
+		mockService.EXPECT().
+			Save(gomock.Any(), link, testUserID).
+			Return(model.ShortLink{}, repository.NewInMemoryDuplicateError(link))
+		mockService.EXPECT().GetByLink(gomock.Any(), link).Return(shortLink, nil)
+
+		req := withUserID(httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(link)))
+		rr := httptest.NewRecorder()
+
+		h.SaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Equal(t, config.Conf.BaseResultAddr+"/"+shortLink.ID, rr.Body.String())
+	})
+
 	t.Run("Missing UserID", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
 		h := ShortLinkHandler{ShortLinkService: mockService}
@@ -220,6 +240,29 @@ func TestGetByIDLinkHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "not found")
 	})
+
+	t.Run("Deleted Link", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		r := chi.NewRouter()
+		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
+
+		id := "deleted-id"
+		mockService.EXPECT().GetByShort(gomock.Any(), id).Return(model.ShortLink{
+			ID:      id,
+			Link:    "https://example.com/deleted",
+			Deleted: true,
+		}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/"+id, nil)
+		rr := httptest.NewRecorder()
+
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusGone, rr.Code)
+		assert.Empty(t, rr.Header().Get("Location"))
+		assert.Empty(t, rr.Body.String())
+	})
 }
 
 func TestAPISaveLinkHandlerFunc(t *testing.T) {
@@ -285,6 +328,31 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "internal error")
+	})
+
+	t.Run("Duplicate Link", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+
+		link := "https://example.com"
+		shortLink := model.ShortLink{ID: "existing-id", Link: link, UserID: testUserID}
+		mockService.EXPECT().
+			Save(gomock.Any(), link, testUserID).
+			Return(model.ShortLink{}, repository.NewInMemoryDuplicateError(link))
+		mockService.EXPECT().GetByLink(gomock.Any(), link).Return(shortLink, nil)
+
+		req := withUserID(httptest.NewRequest(
+			http.MethodPost,
+			"/api/shorten",
+			bytes.NewBufferString(`{"url":"`+link+`"}`),
+		))
+		rr := httptest.NewRecorder()
+
+		h.APISaveLinkHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"result":"`+config.Conf.BaseResultAddr+`/`+shortLink.ID+`"}`, rr.Body.String())
 	})
 
 	t.Run("Missing UserID", func(t *testing.T) {
@@ -544,6 +612,107 @@ func TestAPIGetLinksByUserIDHandlerFunc(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "UserID not defined or empty")
+	})
+}
+
+func TestAPIDeleteLinkBatchHandlerFunc(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		shortIDs := []string{"first-id", "second-id"}
+		mockService.EXPECT().DeleteBatch(gomock.Any(), testUserID, shortIDs).Return(nil)
+
+		req := withUserID(httptest.NewRequest(
+			http.MethodDelete,
+			"/api/user/urls",
+			bytes.NewBufferString(`["first-id","second-id"]`),
+		))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusAccepted, rr.Code)
+		assert.Empty(t, rr.Body.String())
+	})
+
+	t.Run("Empty Batch", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().DeleteBatch(gomock.Any(), testUserID, []string{}).Return(nil)
+
+		req := withUserID(httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewBufferString(`[]`)))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusAccepted, rr.Code)
+	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().DeleteBatch(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewBufferString(`[`))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Cannot decode request JSON body")
+	})
+
+	t.Run("Too Many Items", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().DeleteBatch(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		shortIDs := make([]string, 201)
+		for i := range shortIDs {
+			shortIDs[i] = fmt.Sprintf("id-%d", i)
+		}
+		body, err := json.Marshal(shortIDs)
+		assert.NoError(t, err)
+		req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Too many items in batch request")
+	})
+
+	t.Run("Missing UserID", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		mockService.EXPECT().DeleteBatch(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewBufferString(`["first-id"]`))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "UserID not defined or empty")
+	})
+
+	t.Run("Service Error", func(t *testing.T) {
+		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
+		h := ShortLinkHandler{ShortLinkService: mockService}
+		expectedErr := errors.New("delete links failed")
+		mockService.EXPECT().DeleteBatch(gomock.Any(), testUserID, []string{"first-id"}).Return(expectedErr)
+
+		req := withUserID(httptest.NewRequest(
+			http.MethodDelete,
+			"/api/user/urls",
+			bytes.NewBufferString(`["first-id"]`),
+		))
+		rr := httptest.NewRecorder()
+
+		h.APIDeleteLinkBatchHandlerFunc(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), expectedErr.Error())
 	})
 }
 

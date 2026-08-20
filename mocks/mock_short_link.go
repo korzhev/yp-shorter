@@ -41,6 +41,20 @@ func (m *MockIShortLinkService) EXPECT() *MockIShortLinkServiceMockRecorder {
 	return m.recorder
 }
 
+// DeleteBatch mocks base method.
+func (m *MockIShortLinkService) DeleteBatch(ctx context.Context, userID int, batch []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBatch", ctx, userID, batch)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBatch indicates an expected call of DeleteBatch.
+func (mr *MockIShortLinkServiceMockRecorder) DeleteBatch(ctx, userID, batch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBatch", reflect.TypeOf((*MockIShortLinkService)(nil).DeleteBatch), ctx, userID, batch)
+}
+
 // GenerateID mocks base method.
 func (m *MockIShortLinkService) GenerateID() string {
 	m.ctrl.T.Helper()

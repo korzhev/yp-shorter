@@ -16,6 +16,7 @@ import (
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
+	"github.com/korzhev/yp-shorter/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("creates and redirects a short link", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2))
 		originalURL := "https://example.com/article"
 
 		createRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
@@ -62,8 +63,8 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("handles gzipped JSON request and response", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
-		requestBody := gzipData(t, []byte(`{"url":"https://example.com/gzip"}`))
+		router := RootRouter(c, db, service.NewSemaphore(2))
+		requestBody := gzipData(t, []byte("{\"url\":\"https://example.com/gzip\"}"))
 
 		request := httptest.NewRequest(http.MethodPost, "/api/shorten", bytes.NewReader(requestBody))
 		request.Header.Set("Content-Type", "application/json")
@@ -83,11 +84,11 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("routes batch requests", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
-		requestBody := `[
-			{"correlation_id":"first","original_url":"https://example.com/first"},
-			{"correlation_id":"second","original_url":"https://example.com/second"}
-		]`
+		router := RootRouter(c, db, service.NewSemaphore(2))
+		requestBody := "[" +
+			"{\"correlation_id\":\"first\",\"original_url\":\"https://example.com/first\"}," +
+			"{\"correlation_id\":\"second\",\"original_url\":\"https://example.com/second\"}" +
+			"]"
 
 		request := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", strings.NewReader(requestBody))
 		request.Header.Set("Content-Type", "application/json")
@@ -106,7 +107,7 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("returns links created by authenticated user", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2))
 		originalURL := "https://example.com/user-link"
 
 		createRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
@@ -137,7 +138,7 @@ func TestRootRouter(t *testing.T) {
 		sqlDB, mock := newPingDB(t)
 		mock.ExpectPing()
 		db := &repository.ShortLinkDB{DB: sqlDB}
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2))
 
 		request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 		response := httptest.NewRecorder()
@@ -148,7 +149,7 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("returns not found for an unknown route", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2))
 		request := httptest.NewRequest(http.MethodGet, "/api/unknown/path", nil)
 		response := httptest.NewRecorder()
 

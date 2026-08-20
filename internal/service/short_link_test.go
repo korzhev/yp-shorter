@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 )
 
 func TestGenerateID(t *testing.T) {
@@ -179,6 +184,27 @@ func TestSave(t *testing.T) {
 		assert.Equal(t, userID, res.UserID)
 	})
 
+	t.Run("Success after PostgreSQL ID collision", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := newService(mockRepo)
+		collisionErr := &pgconn.PgError{
+			Code:           "23505",
+			ConstraintName: "short_links_short_uidx",
+		}
+		gomock.InOrder(
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
+				Return(model.ShortLink{}, collisionErr),
+			mockRepo.EXPECT().Save(ctx, idMatcher, testLink, userID).
+				Return(model.ShortLink{ID: "abc", Link: testLink, UserID: userID}, nil),
+		)
+
+		res, err := service.Save(ctx, testLink, userID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, testLink, res.Link)
+		assert.Equal(t, userID, res.UserID)
+	})
+
 	t.Run("Fail after max retries", func(t *testing.T) {
 		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
 		service := newService(mockRepo)
@@ -269,4 +295,128 @@ func TestSaveBatch(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, res, actual)
 	})
+
+	t.Run("Fail after max retries", func(t *testing.T) {
+		mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+		service := newService(mockRepo)
+		expectedErr := repository.NewInMemoryDuplicateIDError("abc")
+		mockRepo.EXPECT().SaveBatch(ctx, userID, batchMatcher).
+			Return(nil, expectedErr).Times(11)
+
+		actual, err := service.SaveBatch(ctx, userID, batch)
+
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Nil(t, actual)
+	})
+}
+
+func TestIsDuplicateIDError(t *testing.T) {
+	service := ShortLinkService{}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "in-memory duplicate ID",
+			err:  repository.NewInMemoryDuplicateIDError("abc"),
+			want: true,
+		},
+		{
+			name: "wrapped in-memory duplicate ID",
+			err:  errors.Join(errors.New("save failed"), repository.NewInMemoryDuplicateIDError("abc")),
+			want: true,
+		},
+		{
+			name: "PostgreSQL duplicate ID",
+			err: &pgconn.PgError{
+				Code:           "23505",
+				ConstraintName: "short_links_short_uidx",
+			},
+			want: true,
+		},
+		{
+			name: "duplicate original link",
+			err: &pgconn.PgError{
+				Code:           "23505",
+				ConstraintName: "short_links_link_uidx",
+			},
+			want: false,
+		},
+		{
+			name: "other repository error",
+			err:  errors.New("repository unavailable"),
+			want: false,
+		},
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, service.isDuplicateIDError(tt.err))
+		})
+	}
+}
+
+func TestDeleteBatch(t *testing.T) {
+	const userID = 42
+	ctx := context.Background()
+	shortIDs := []string{"id-1", "id-2", "id-3", "id-4", "id-5", "id-6", "id-7", "id-8", "id-9"}
+	expectedBatches := [][]string{
+		{"id-1", "id-2", "id-3", "id-4"},
+		{"id-5", "id-6", "id-7", "id-8"},
+		{"id-9"},
+	}
+
+	previousLogger := logger.Log
+	logger.Log = zap.NewNop().Sugar()
+	t.Cleanup(func() { logger.Log = previousLogger })
+
+	mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+	service := ShortLinkService{
+		ShortLinkDB: mockRepo,
+		DBSemaphore: NewSemaphore(2),
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(expectedBatches))
+	for _, batch := range expectedBatches {
+		mockRepo.EXPECT().DeleteBatch(ctx, userID, batch).DoAndReturn(
+			func(context.Context, int, []string) error {
+				wg.Done()
+				return nil
+			},
+		)
+	}
+
+	err := service.DeleteBatch(ctx, userID, shortIDs)
+
+	assert.NoError(t, err)
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("DeleteBatch did not process all batches in time")
+	}
+}
+
+func TestDeleteBatchEmpty(t *testing.T) {
+	mockRepo := mocks.NewMockIShortLinkRepository(gomock.NewController(t))
+	service := ShortLinkService{
+		ShortLinkDB: mockRepo,
+		DBSemaphore: NewSemaphore(1),
+	}
+
+	err := service.DeleteBatch(context.Background(), 42, nil)
+
+	assert.NoError(t, err)
 }
