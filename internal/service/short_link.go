@@ -136,13 +136,15 @@ func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs 
 	// run some gorutines
 	for i := 0; i < w; i++ {
 		go func() {
-			// s.DBSemaphore.Acquire()
-			// defer s.DBSemaphore.Release()
+			s.DBSemaphore.Acquire()
+			defer s.DBSemaphore.Release()
 			j := i * batchSize
 			k := min(j+batchSize, l)
 			// task says that there is no need to notify
-			err := s.ShortLinkDB.DeleteBatch(ctx, userID, shortIDs[j:k])
-			logger.Log.Infow("Cannot decode request JSON body", "error", err)
+			err := s.ShortLinkDB.DeleteBatch(context.Background(), userID, shortIDs[j:k])
+			if err != nil {
+				logger.Log.Errorw("Cannot decode request JSON body", "error", err)
+			}
 		}() // no need to wait for gorutines
 	}
 	return nil
