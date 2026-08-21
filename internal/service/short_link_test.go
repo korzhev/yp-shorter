@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -366,11 +367,14 @@ func TestIsDuplicateIDError(t *testing.T) {
 func TestDeleteBatch(t *testing.T) {
 	const userID = 42
 	ctx := context.Background()
-	shortIDs := []string{"id-1", "id-2", "id-3", "id-4", "id-5", "id-6", "id-7", "id-8", "id-9"}
+	shortIDs := make([]string, 41)
+	for i := range shortIDs {
+		shortIDs[i] = fmt.Sprintf("id-%d", i+1)
+	}
 	expectedBatches := [][]string{
-		{"id-1", "id-2", "id-3", "id-4"},
-		{"id-5", "id-6", "id-7", "id-8"},
-		{"id-9"},
+		shortIDs[:20],
+		shortIDs[20:40],
+		shortIDs[40:],
 	}
 
 	previousLogger := logger.Log

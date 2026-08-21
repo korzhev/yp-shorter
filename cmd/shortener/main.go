@@ -80,7 +80,7 @@ func main() {
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
 	defer db.Close()
 
-	s := service.NewSemaphore(2)
+	s := service.NewSemaphore(10)
 	r := RootRouter(config.Conf, db, s)
 	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {

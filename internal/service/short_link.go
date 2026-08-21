@@ -126,7 +126,7 @@ func (s ShortLinkService) SaveBatch(ctx context.Context, userID int, batch []mod
 
 func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs []string) error {
 	// max number of ids in one batch sql request
-	batchSize := 4
+	batchSize := 20
 	l := len(shortIDs)
 	// number of goruties
 	w := l / batchSize
@@ -138,8 +138,8 @@ func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs 
 		go func() {
 			s.DBSemaphore.Acquire()
 			defer s.DBSemaphore.Release()
-			j:= i*batchSize
-			k := min(j + batchSize, l)
+			j := i * batchSize
+			k := min(j+batchSize, l)
 			// task says that there is no need to notify
 			err := s.ShortLinkDB.DeleteBatch(ctx, userID, shortIDs[j:k])
 			logger.Log.Infow("Cannot decode request JSON body", "error", err)
