@@ -62,7 +62,7 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 	s.storage.RLock()
 	sl, ok := s.storage.M[short]
 	defer s.storage.RUnlock()
-	if !ok {
+	if !ok || sl.Deleted == true {
 		return sl, fmt.Errorf("No short link with ID: %s", short)
 	}
 
@@ -74,7 +74,7 @@ func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) 
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.Link == link {
+		if v.Link == link && v.Deleted == false {
 			return v, nil
 		}
 	}
@@ -88,7 +88,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.UserID == userID {
+		if v.UserID == userID && v.Deleted == false {
 			res = append(res, v)
 		}
 	}
@@ -104,14 +104,14 @@ func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model
 }
 
 func (s *ShortLinkDB) getByLinkFromDB(ctx context.Context, link string) (model.ShortLink, error) {
-	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE link = $1 LIMIT 1", link)
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE link = $1 AND deleted = FALSE LIMIT 1", link)
 	sl := model.ShortLink{}
 	err := row.Scan(&sl.ID, &sl.Link)
 	return sl, err
 }
 
 func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]model.ShortLink, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1", userID)
+	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1 AND deleted = FALSE", userID)
 	if err != nil {
 		return nil, err
 	}

@@ -446,8 +446,6 @@ func TestShortLinkDB_DeleteBatch(t *testing.T) {
 		actual, err := db.GetByUserID(ctx, userID)
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []model.ShortLink{
-			expected["first-id"],
-			expected["second-id"],
 			expected["untouched-id"],
 		}, actual)
 	})
@@ -563,7 +561,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 		link := "https://example.com"
-		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 AND deleted = FALSE LIMIT 1`).
 			WithArgs(link).
 			WillReturnRows(sqlmock.NewRows([]string{"short", "link"}).AddRow("abcde", link))
 		mock.ExpectClose()
@@ -584,7 +582,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		})
 		link := "https://example.com"
 		expectedErr := errors.New("query failed")
-		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link FROM short_links WHERE link = \$1 AND deleted = FALSE LIMIT 1`).
 			WithArgs(link).
 			WillReturnError(expectedErr)
 		mock.ExpectClose()
@@ -608,7 +606,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 			{ID: "first-id", Link: "https://example.com/first", UserID: userID, Deleted: false},
 			{ID: "second-id", Link: "https://example.com/second", UserID: userID, Deleted: false},
 		}
-		mock.ExpectQuery(`SELECT short, link, user_id FROM short_links WHERE user_id = \$1`).
+		mock.ExpectQuery(`SELECT short, link, user_id FROM short_links WHERE user_id = \$1 AND deleted = FALSE`).
 			WithArgs(userID).
 			WillReturnRows(sqlmock.NewRows([]string{"short", "link", "user_id"}).
 				AddRow(expected[0].ID, expected[0].Link, expected[0].UserID).
