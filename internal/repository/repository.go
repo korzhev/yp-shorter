@@ -88,7 +88,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.UserID == userID && v.Deleted == false {
+		if v.UserID == userID {
 			res = append(res, v)
 		}
 	}
@@ -97,7 +97,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 }
 
 func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model.ShortLink, error) {
-	row := s.DB.QueryRowContext(ctx, "SELECT short, link, deleted FROM short_links WHERE short = $1 LIMIT 1", short)
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link, deleted FROM short_links WHERE short = $1 AND deleted = FALSE LIMIT 1", short)
 	sl := model.ShortLink{ID: short}
 	err := row.Scan(&sl.ID, &sl.Link, &sl.Deleted)
 	return sl, err
@@ -111,7 +111,7 @@ func (s *ShortLinkDB) getByLinkFromDB(ctx context.Context, link string) (model.S
 }
 
 func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]model.ShortLink, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1 AND deleted = FALSE", userID)
+	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
