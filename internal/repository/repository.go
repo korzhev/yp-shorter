@@ -62,7 +62,7 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 	s.storage.RLock()
 	sl, ok := s.storage.M[short]
 	defer s.storage.RUnlock()
-	if !ok {
+	if !ok || sl.Deleted == true {
 		return sl, fmt.Errorf("No short link with ID: %s", short)
 	}
 
@@ -74,7 +74,7 @@ func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) 
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.Link == link {
+		if v.Link == link && v.Deleted == false {
 			return v, nil
 		}
 	}
@@ -82,18 +82,58 @@ func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) 
 	return model.ShortLink{}, fmt.Errorf("No link: %s", link)
 }
 
+func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, error) {
+	res := make([]model.ShortLink, 0)
+	s.storage.RLock()
+	defer s.storage.RUnlock()
+
+	for _, v := range s.storage.M {
+		if v.UserID == userID && v.Deleted == false {
+			res = append(res, v)
+		}
+	}
+
+	return res, nil
+}
+
 func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model.ShortLink, error) {
-	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE short = $1 LIMIT 1", short)
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link, deleted FROM short_links WHERE short = $1 LIMIT 1", short)
 	sl := model.ShortLink{ID: short}
-	err := row.Scan(&sl.ID, &sl.Link)
+	err := row.Scan(&sl.ID, &sl.Link, &sl.Deleted)
 	return sl, err
 }
 
 func (s *ShortLinkDB) getByLinkFromDB(ctx context.Context, link string) (model.ShortLink, error) {
-	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE link = $1 LIMIT 1", link)
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link FROM short_links WHERE link = $1 AND deleted = FALSE LIMIT 1", link)
 	sl := model.ShortLink{}
 	err := row.Scan(&sl.ID, &sl.Link)
 	return sl, err
+}
+
+func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]model.ShortLink, error) {
+	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1 AND deleted = FALSE", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]model.ShortLink, 0)
+	for rows.Next() {
+		var sl model.ShortLink
+		err = rows.Scan(&sl.ID, &sl.Link, &sl.UserID)
+		if err != nil {
+			return nil, err
+		}
+
+		res = append(res, sl)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return res, err
 }
 
 func (s *ShortLinkDB) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
@@ -124,24 +164,38 @@ func (s *ShortLinkDB) GetByLink(ctx context.Context, link string) (model.ShortLi
 	return sl, err
 }
 
-func (s *ShortLinkDB) saveDatabase(ctx context.Context, short, link string) (model.ShortLink, error) {
-	sl := model.ShortLink{ID: short, Link: link}
-	_, err := s.DB.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", short, link)
+func (s *ShortLinkDB) GetByUserID(ctx context.Context, userID int) ([]model.ShortLink, error) {
+	res := make([]model.ShortLink, 0)
+	var err error
+	switch s.storageType {
+	case config.Database:
+		res, err = s.getByUserIDFromDB(ctx, userID)
+	default:
+		// File also as InMemory uses memory to get ShortLink
+		res, err = s.getByUserIDFromMemory(userID)
+	}
+
+	return res, err
+}
+
+func (s *ShortLinkDB) saveDatabase(ctx context.Context, short, link string, userID int) (model.ShortLink, error) {
+	sl := model.ShortLink{ID: short, Link: link, UserID: userID}
+	_, err := s.DB.ExecContext(ctx, "INSERT INTO short_links (short, link, user_id) VALUES ($1, $2, $3)", short, link, userID)
 	if err != nil {
 		return sl, err
 	}
 	return sl, nil
 }
 
-func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.ShortLink, userID int) ([]model.ShortLink, error) {
 	res := make([]model.ShortLink, 0, len(batch))
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return res, err
 	}
 	for _, item := range batch {
-		sl := model.ShortLink{ID: item.ID, Link: item.Link}
-		_, err := tx.ExecContext(ctx, "INSERT INTO short_links (short, link) VALUES ($1, $2)", item.ID, item.Link)
+		sl := model.ShortLink{ID: item.ID, Link: item.Link, UserID: userID}
+		_, err := tx.ExecContext(ctx, "INSERT INTO short_links (short, link, user_id) VALUES ($1, $2, $3)", item.ID, item.Link, userID)
 		if err != nil {
 			if rerr := tx.Rollback(); rerr != nil {
 				return nil, rerr
@@ -155,8 +209,8 @@ func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.Short
 	return res, err
 }
 
-func (s *ShortLinkDB) saveInMemory(id, link string) (model.ShortLink, error) {
-	sl := model.ShortLink{ID: id, Link: link}
+func (s *ShortLinkDB) saveInMemory(id, link string, userID int) (model.ShortLink, error) {
+	sl := model.ShortLink{ID: id, Link: link, UserID: userID}
 	// check that id is not used
 	_, ok := s.storage.M[id]
 	// ok means id is already used
@@ -191,7 +245,7 @@ func (s *ShortLinkDB) saveFile() error {
 	return nil
 }
 
-func (s *ShortLinkDB) Save(ctx context.Context, id, link string) (model.ShortLink, error) {
+func (s *ShortLinkDB) Save(ctx context.Context, id, link string, userID int) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
 	if s.storageType != config.Database {
@@ -200,21 +254,21 @@ func (s *ShortLinkDB) Save(ctx context.Context, id, link string) (model.ShortLin
 	}
 	switch s.storageType {
 	case config.File:
-		sl, err = s.saveInMemory(id, link)
+		sl, err = s.saveInMemory(id, link, userID)
 		if err != nil {
 			return sl, err
 		}
 		err = s.saveFile()
 	case config.Database:
-		sl, err = s.saveDatabase(ctx, id, link)
+		sl, err = s.saveDatabase(ctx, id, link, userID)
 	default:
-		sl, err = s.saveInMemory(id, link)
+		sl, err = s.saveInMemory(id, link, userID)
 	}
 
 	return sl, err
 }
 
-func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortLink, error) {
+func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink, userID int) ([]model.ShortLink, error) {
 	res := make([]model.ShortLink, 0, len(batch))
 
 	for _, item := range batch {
@@ -233,14 +287,14 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink) ([]model.ShortL
 	}
 
 	for _, item := range batch {
-		sl := model.ShortLink{ID: item.ID, Link: item.Link}
+		sl := model.ShortLink{ID: item.ID, Link: item.Link, UserID: userID, Deleted: false}
 		s.storage.M[item.ID] = sl
 		res = append(res, sl)
 	}
 	return res, nil
 }
 
-func (s *ShortLinkDB) SaveBatch(ctx context.Context, batch []model.ShortLink) ([]model.ShortLink, error) {
+func (s *ShortLinkDB) SaveBatch(ctx context.Context, userID int, batch []model.ShortLink) ([]model.ShortLink, error) {
 	res := make([]model.ShortLink, 0, len(batch))
 	var err error
 	if s.storageType != config.Database {
@@ -250,18 +304,60 @@ func (s *ShortLinkDB) SaveBatch(ctx context.Context, batch []model.ShortLink) ([
 
 	switch s.storageType {
 	case config.File:
-		res, err = s.saveBatchInMemory(batch)
+		res, err = s.saveBatchInMemory(batch, userID)
 		if err != nil {
 			return res, err
 		}
 		err = s.saveFile()
 	case config.Database:
-		res, err = s.saveBatchDatabase(ctx, batch)
+		res, err = s.saveBatchDatabase(ctx, batch, userID)
 	default:
-		res, err = s.saveBatchInMemory(batch)
+		res, err = s.saveBatchInMemory(batch, userID)
 	}
 
 	return res, err
+}
+
+func (s *ShortLinkDB) deleteBatchDatabase(ctx context.Context, shortIDs []string, userID int) error {
+	_, err := s.DB.ExecContext(ctx, "UPDATE short_links SET deleted = TRUE WHERE user_id = $1 AND short = ANY($2)", userID, shortIDs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ShortLinkDB) deleteBatchInMemory(shortIDs []string, userID int) error {
+	for _, id := range shortIDs {
+		sl, ok := s.storage.M[id]
+		if ok == true && sl.UserID == userID {
+			sl.Deleted = true
+			s.storage.M[id] = sl
+		}
+	}
+	return nil
+}
+
+func (s *ShortLinkDB) DeleteBatch(ctx context.Context, userID int, batch []string) error {
+	var err error
+	if s.storageType != config.Database {
+		s.storage.Lock()
+		defer s.storage.Unlock()
+	}
+
+	switch s.storageType {
+	case config.File:
+		err = s.deleteBatchInMemory(batch, userID)
+		if err != nil {
+			return err
+		}
+		err = s.saveFile()
+	case config.Database:
+		err = s.deleteBatchDatabase(ctx, batch, userID)
+	default:
+		err = s.deleteBatchInMemory(batch, userID)
+	}
+
+	return err
 }
 
 func (s *ShortLinkDB) Close() error {

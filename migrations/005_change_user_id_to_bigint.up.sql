@@ -1,0 +1,3 @@
+ALTER TABLE short_links
+ALTER COLUMN user_id TYPE BIGINT
+USING user_id::BIGINT;
