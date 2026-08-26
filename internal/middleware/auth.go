@@ -19,7 +19,9 @@ type Claims struct {
 
 type AuthMiddleware func(next http.Handler) http.Handler
 
-const UserIDContextKey = "ctxUserID"
+type CtxKey string
+
+const UserIDContextKey CtxKey = "ctxUserID"
 
 func BuildJWTString(d time.Duration, id int, secret string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
