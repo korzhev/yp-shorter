@@ -97,7 +97,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 }
 
 func (s *ShortLinkDB) getByShortFromDB(ctx context.Context, short string) (model.ShortLink, error) {
-	row := s.DB.QueryRowContext(ctx, "SELECT short, link, deleted FROM short_links WHERE short = $1 AND deleted = FALSE LIMIT 1", short)
+	row := s.DB.QueryRowContext(ctx, "SELECT short, link, deleted FROM short_links WHERE short = $1 LIMIT 1", short)
 	sl := model.ShortLink{ID: short}
 	err := row.Scan(&sl.ID, &sl.Link, &sl.Deleted)
 	return sl, err

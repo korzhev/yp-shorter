@@ -519,7 +519,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 		// ExpectQuery uses strings as regexp, so `$`,`(`,`)` should be quoted
-		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 AND deleted = FALSE LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 LIMIT 1`).
 			WithArgs("abcde").
 			WillReturnRows(sqlmock.NewRows([]string{"short", "link", "deleted"}).
 				AddRow("abcde", "https://example.com", true))
@@ -541,7 +541,7 @@ func TestShortLinkDB_Database(t *testing.T) {
 		})
 		expectedErr := errors.New("query failed")
 
-		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 AND deleted = FALSE LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link, deleted FROM short_links WHERE short = \$1 LIMIT 1`).
 			WithArgs("abcde").
 			WillReturnError(expectedErr)
 		mock.ExpectClose()
