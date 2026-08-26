@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/bwmarrin/snowflake"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/go-chi/chi/v5"
@@ -16,7 +17,7 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
-func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore) chi.Router {
+func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
@@ -32,7 +33,7 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 	r := chi.NewRouter()
 
 	r.Use(middleware.NewLoggerMiddleware(logger.Log))
-	r.Use(middleware.NewAuthMiddleware(c))
+	r.Use(middleware.NewAuthMiddleware(c, node))
 	r.Use(middleware.NewCompressorMiddleware())
 	r.Use(chiMW.RedirectSlashes)
 	r.Use(chiMW.Recoverer)
@@ -81,7 +82,14 @@ func main() {
 	defer db.Close()
 
 	s := service.NewSemaphore(10)
-	r := RootRouter(config.Conf, db, s)
+	node, err := snowflake.NewNode(1)
+	if err != nil {
+		logger.Log.Fatalw(
+			"Failed to generate node",
+			"error", err,
+		)
+	}
+	r := RootRouter(config.Conf, db, s, node)
 	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)

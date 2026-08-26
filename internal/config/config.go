@@ -56,7 +56,7 @@ func ParseFlags() error {
 	// sslmode=disable for local db in docker
 	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string. format: postgres://user:pass@localhost:5432/db?sslmode=disable")
 	flag.IntVar(&Conf.TokenExpMinutes, "te", 5, "token expire time in minutes")
-	flag.StringVar(&Conf.TokenSecret, "ts", "supersecret", "token secret")
+	flag.StringVar(&Conf.TokenSecret, "ts", "", "token secret")
 	flag.Parse()
 
 	err := env.Parse(&Conf)

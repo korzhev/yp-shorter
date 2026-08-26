@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
+	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
@@ -52,9 +53,9 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	userID, ok := ctx.Value("UserID").(int)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
 	if !ok {
-		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
 		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
 		return
 	}
@@ -114,9 +115,9 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 	}
 
 	ctx := r.Context()
-	userID, ok := ctx.Value("UserID").(int)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
 	if !ok {
-		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
 		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
 		return
 	}
@@ -173,9 +174,9 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 		}
 	}
 	ctx := r.Context()
-	userID, ok := ctx.Value("UserID").(int)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
 	if !ok {
-		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
 		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
 		return
 	}
@@ -213,9 +214,9 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 
 func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID, ok := ctx.Value("UserID").(int)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
 	if !ok {
-		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
 		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
 		return
 	}
@@ -239,11 +240,11 @@ func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	status := http.StatusOK
 	if len(links) == 0 {
-		status = http.StatusNoContent
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	w.Write(resp)
 }
 
@@ -264,9 +265,9 @@ func (s ShortLinkHandler) APIDeleteLinkBatchHandlerFunc(w http.ResponseWriter, r
 		return
 	}
 	ctx := r.Context()
-	userID, ok := ctx.Value("UserID").(int)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
 	if !ok {
-		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value("UserID"))
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
 		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
 		return
 	}

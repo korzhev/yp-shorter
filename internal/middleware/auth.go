@@ -3,10 +3,10 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
 	"net/http"
 	"time"
 
+	"github.com/bwmarrin/snowflake"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
@@ -18,6 +18,8 @@ type Claims struct {
 }
 
 type AuthMiddleware func(next http.Handler) http.Handler
+
+const UserIDContextKey = "ctxUserID"
 
 func BuildJWTString(d time.Duration, id int, secret string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
@@ -62,24 +64,19 @@ func GetUserID(tokenString string, secret string) int {
 		return 0
 	}
 
-	if claims.UserID < 1 || claims.UserID > 100 {
-		logger.Log.Infow("Invalid UserID", "user_id", claims.UserID)
-		return 0
-	}
-
 	return claims.UserID
 }
 
-func NewAuthMiddleware(c config.Config) AuthMiddleware {
+func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("Auth")
 			// no cookie
 			if err != nil {
 				// random user id 1-100
-				newId := rand.IntN(100) + 1
+				newId := node.Generate()
 				d := time.Minute * time.Duration(c.TokenExpMinutes)
-				t, e := BuildJWTString(d, newId, c.TokenSecret)
+				t, e := BuildJWTString(d, int(newId.Int64()), c.TokenSecret)
 				if e != nil {
 					http.Error(w, e.Error(), http.StatusInternalServerError)
 					return
@@ -90,7 +87,7 @@ func NewAuthMiddleware(c config.Config) AuthMiddleware {
 					Value:   t,
 					Expires: time.Now().Add(d),
 				})
-				ctx := context.WithValue(r.Context(), "UserID", newId)
+				ctx := context.WithValue(r.Context(), UserIDContextKey, int(newId.Int64()))
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -100,7 +97,7 @@ func NewAuthMiddleware(c config.Config) AuthMiddleware {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "UserID", id)
+			ctx := context.WithValue(r.Context(), UserIDContextKey, id)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

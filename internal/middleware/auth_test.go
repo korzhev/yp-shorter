@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bwmarrin/snowflake"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
@@ -111,6 +112,8 @@ func TestNewAuthMiddleware(t *testing.T) {
 		TokenExpMinutes: 10,
 		TokenSecret:     secret,
 	}
+	node, err := snowflake.NewNode(1)
+	require.NoError(t, err)
 
 	t.Run("creates user and auth cookie when request has no cookie", func(t *testing.T) {
 		var contextUserID int
@@ -118,7 +121,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			nextCalled = true
 			var ok bool
-			contextUserID, ok = r.Context().Value("UserID").(int)
+			contextUserID, ok = r.Context().Value(UserIDContextKey).(int)
 			require.True(t, ok)
 			w.WriteHeader(http.StatusNoContent)
 		})
@@ -126,12 +129,10 @@ func TestNewAuthMiddleware(t *testing.T) {
 		rr := httptest.NewRecorder()
 		before := time.Now().Add(time.Duration(c.TokenExpMinutes) * time.Minute)
 
-		NewAuthMiddleware(c)(next).ServeHTTP(rr, req)
+		NewAuthMiddleware(c, node)(next).ServeHTTP(rr, req)
 
 		assert.True(t, nextCalled)
 		assert.Equal(t, http.StatusNoContent, rr.Code)
-		assert.GreaterOrEqual(t, contextUserID, 1)
-		assert.LessOrEqual(t, contextUserID, 100)
 
 		cookies := rr.Result().Cookies()
 		require.Len(t, cookies, 1)
@@ -141,12 +142,12 @@ func TestNewAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("uses user ID from valid auth cookie", func(t *testing.T) {
-		const userID = 73
+		userID := int(node.Generate().Int64())
 		token := mustBuildJWTString(t, time.Minute, userID, secret)
 		var contextUserID int
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var ok bool
-			contextUserID, ok = r.Context().Value("UserID").(int)
+			contextUserID, ok = r.Context().Value(UserIDContextKey).(int)
 			require.True(t, ok)
 			w.WriteHeader(http.StatusAccepted)
 		})
@@ -154,7 +155,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "Auth", Value: token})
 		rr := httptest.NewRecorder()
 
-		NewAuthMiddleware(c)(next).ServeHTTP(rr, req)
+		NewAuthMiddleware(c, node)(next).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusAccepted, rr.Code)
 		assert.Equal(t, userID, contextUserID)
@@ -170,7 +171,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "Auth", Value: "not-a-jwt"})
 		rr := httptest.NewRecorder()
 
-		NewAuthMiddleware(c)(next).ServeHTTP(rr, req)
+		NewAuthMiddleware(c, node)(next).ServeHTTP(rr, req)
 
 		assert.False(t, nextCalled)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
@@ -187,7 +188,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "Auth", Value: token})
 		rr := httptest.NewRecorder()
 
-		NewAuthMiddleware(c)(next).ServeHTTP(rr, req)
+		NewAuthMiddleware(c, node)(next).ServeHTTP(rr, req)
 
 		assert.False(t, nextCalled)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)

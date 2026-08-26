@@ -88,7 +88,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.UserID == userID {
+		if v.UserID == userID && v.Deleted == false {
 			res = append(res, v)
 		}
 	}
@@ -111,7 +111,7 @@ func (s *ShortLinkDB) getByLinkFromDB(ctx context.Context, link string) (model.S
 }
 
 func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]model.ShortLink, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1 LIMIT 1", userID)
+	rows, err := s.DB.QueryContext(ctx, "SELECT short, link, user_id FROM short_links WHERE user_id = $1 AND deleted = FALSE", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink, userID int) ([]
 	}
 
 	for _, item := range batch {
-		sl := model.ShortLink{ID: item.ID, Link: item.Link, UserID: userID}
+		sl := model.ShortLink{ID: item.ID, Link: item.Link, UserID: userID, Deleted: false}
 		s.storage.M[item.ID] = sl
 		res = append(res, sl)
 	}
@@ -330,7 +330,8 @@ func (s *ShortLinkDB) deleteBatchInMemory(shortIDs []string, userID int) error {
 	for _, id := range shortIDs {
 		sl, ok := s.storage.M[id]
 		if ok == true && sl.UserID == userID {
-			delete(s.storage.M, id)
+			sl.Deleted = true
+			s.storage.M[id] = sl
 		}
 	}
 	return nil

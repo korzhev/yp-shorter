@@ -410,6 +410,18 @@ func TestShortLinkDB_DeleteBatch(t *testing.T) {
 		},
 	}
 	expected := InMemoryStorage{
+		"first-id": {
+			ID:      "first-id",
+			Link:    "https://example.com/first",
+			UserID:  userID,
+			Deleted: true,
+		},
+		"second-id": {
+			ID:      "second-id",
+			Link:    "https://example.com/second",
+			UserID:  userID,
+			Deleted: true,
+		},
 		"another-user-id": initial["another-user-id"],
 		"untouched-id":    initial["untouched-id"],
 	}
@@ -422,7 +434,7 @@ func TestShortLinkDB_DeleteBatch(t *testing.T) {
 		return clone
 	}
 
-	t.Run("deletes only links owned by user from memory", func(t *testing.T) {
+	t.Run("marks only links owned by user as deleted in memory", func(t *testing.T) {
 		db := NewShortLinkDB("", "", config.InMemory)
 		db.storage.M = cloneStorage(initial)
 
@@ -430,9 +442,13 @@ func TestShortLinkDB_DeleteBatch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, db.storage.M)
+
+		actual, err := db.GetByUserID(ctx, userID)
+		require.NoError(t, err)
+		assert.Equal(t, []model.ShortLink{initial["untouched-id"]}, actual)
 	})
 
-	t.Run("deletes links and persists file storage", func(t *testing.T) {
+	t.Run("marks links as deleted and persists file storage", func(t *testing.T) {
 		filePath := filepath.Join(t.TempDir(), "storage.json")
 		db := NewShortLinkDB(filePath, "", config.File)
 		db.storage.M = cloneStorage(initial)
@@ -585,10 +601,10 @@ func TestShortLinkDB_Database(t *testing.T) {
 		})
 		userID := 42
 		expected := []model.ShortLink{
-			{ID: "first-id", Link: "https://example.com/first", UserID: userID},
-			{ID: "second-id", Link: "https://example.com/second", UserID: userID},
+			{ID: "first-id", Link: "https://example.com/first", UserID: userID, Deleted: false},
+			{ID: "second-id", Link: "https://example.com/second", UserID: userID, Deleted: false},
 		}
-		mock.ExpectQuery(`SELECT short, link, user_id FROM short_links WHERE user_id = \$1 LIMIT 1`).
+		mock.ExpectQuery(`SELECT short, link, user_id FROM short_links WHERE user_id = \$1 AND deleted = FALSE`).
 			WithArgs(userID).
 			WillReturnRows(sqlmock.NewRows([]string{"short", "link", "user_id"}).
 				AddRow(expected[0].ID, expected[0].Link, expected[0].UserID).

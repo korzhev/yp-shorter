@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0

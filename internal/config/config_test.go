@@ -75,7 +75,7 @@ func TestParseFlags(t *testing.T) {
 		assert.Empty(t, Conf.FileStoragePath)
 		assert.Empty(t, Conf.DBDSN)
 		assert.Equal(t, 5, Conf.TokenExpMinutes)
-		assert.Equal(t, "supersecret", Conf.TokenSecret)
+		assert.Empty(t, Conf.TokenSecret)
 		assert.Equal(t, InMemory, Conf.StorageType)
 	})
 

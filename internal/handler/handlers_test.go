@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
+	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/mocks"
@@ -24,7 +25,7 @@ import (
 const testUserID = 42
 
 func withUserID(req *http.Request) *http.Request {
-	return req.WithContext(context.WithValue(req.Context(), "UserID", testUserID))
+	return req.WithContext(context.WithValue(req.Context(), middleware.UserIDContextKey, testUserID))
 }
 
 func TestIsDuplicateError(t *testing.T) {
