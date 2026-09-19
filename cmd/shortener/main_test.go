@@ -12,10 +12,12 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/bwmarrin/snowflake"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
+	"github.com/korzhev/yp-shorter/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +28,8 @@ func TestRootRouter(t *testing.T) {
 		BaseResultAddr:   baseResultAddr,
 		ShortLinkCharset: config.DefaultCharset,
 		ShortLinkLength:  6,
+		TokenExpMinutes:  5,
+		TokenSecret:      "router-test-secret",
 	}
 	oldConfig := config.Conf
 	config.Conf = c
@@ -33,10 +37,12 @@ func TestRootRouter(t *testing.T) {
 		config.Conf = oldConfig
 	})
 	require.NoError(t, logger.InitLogger("error"))
+	node, err := snowflake.NewNode(1)
+	require.NoError(t, err)
 
 	t.Run("creates and redirects a short link", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
 		originalURL := "https://example.com/article"
 
 		createRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
@@ -60,8 +66,8 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("handles gzipped JSON request and response", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
-		requestBody := gzipData(t, []byte(`{"url":"https://example.com/gzip"}`))
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
+		requestBody := gzipData(t, []byte("{\"url\":\"https://example.com/gzip\"}"))
 
 		request := httptest.NewRequest(http.MethodPost, "/api/shorten", bytes.NewReader(requestBody))
 		request.Header.Set("Content-Type", "application/json")
@@ -81,11 +87,11 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("routes batch requests", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
-		requestBody := `[
-			{"correlation_id":"first","original_url":"https://example.com/first"},
-			{"correlation_id":"second","original_url":"https://example.com/second"}
-		]`
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
+		requestBody := "[" +
+			"{\"correlation_id\":\"first\",\"original_url\":\"https://example.com/first\"}," +
+			"{\"correlation_id\":\"second\",\"original_url\":\"https://example.com/second\"}" +
+			"]"
 
 		request := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", strings.NewReader(requestBody))
 		request.Header.Set("Content-Type", "application/json")
@@ -102,11 +108,40 @@ func TestRootRouter(t *testing.T) {
 		assert.True(t, strings.HasPrefix(result[1].ShortURL, baseResultAddr+"/"))
 	})
 
+	t.Run("returns links created by authenticated user", func(t *testing.T) {
+		db := repository.NewShortLinkDB("", "", config.InMemory)
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
+		originalURL := "https://example.com/user-link"
+
+		createRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
+		createResponse := httptest.NewRecorder()
+		router.ServeHTTP(createResponse, createRequest)
+
+		require.Equal(t, http.StatusCreated, createResponse.Code)
+		shortURL := createResponse.Body.String()
+		cookies := createResponse.Result().Cookies()
+		require.Len(t, cookies, 1)
+		require.Equal(t, "Auth", cookies[0].Name)
+
+		listRequest := httptest.NewRequest(http.MethodGet, "/api/user/urls", nil)
+		listRequest.AddCookie(cookies[0])
+		listResponse := httptest.NewRecorder()
+		router.ServeHTTP(listResponse, listRequest)
+
+		require.Equal(t, http.StatusOK, listResponse.Code)
+		assert.Equal(t, "application/json", listResponse.Header().Get("Content-Type"))
+		var result []model.UserShortLinkResponse
+		require.NoError(t, json.Unmarshal(listResponse.Body.Bytes(), &result))
+		require.Len(t, result, 1)
+		assert.Equal(t, originalURL, result[0].OriginalURL)
+		assert.Equal(t, shortURL, result[0].ShortURL)
+	})
+
 	t.Run("routes database ping", func(t *testing.T) {
 		sqlDB, mock := newPingDB(t)
 		mock.ExpectPing()
 		db := &repository.ShortLinkDB{DB: sqlDB}
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
 
 		request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 		response := httptest.NewRecorder()
@@ -117,7 +152,7 @@ func TestRootRouter(t *testing.T) {
 
 	t.Run("returns not found for an unknown route", func(t *testing.T) {
 		db := repository.NewShortLinkDB("", "", config.InMemory)
-		router := RootRouter(c, db)
+		router := RootRouter(c, db, service.NewSemaphore(2), node)
 		request := httptest.NewRequest(http.MethodGet, "/api/unknown/path", nil)
 		response := httptest.NewRecorder()
 

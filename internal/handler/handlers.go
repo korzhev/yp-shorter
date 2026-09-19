@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/config"
 	"github.com/korzhev/yp-shorter/internal/logger"
+	"github.com/korzhev/yp-shorter/internal/middleware"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
 	"github.com/korzhev/yp-shorter/internal/service"
@@ -50,12 +51,20 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Empty body", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(r.Context(), link)
+
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	sl, err := s.ShortLinkService.Save(ctx, link, userID)
 
 	status := http.StatusCreated
 	if IsDuplicateError(err) {
 		status = http.StatusConflict
-		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+		sl, err = s.ShortLinkService.GetByLink(ctx, link)
 	}
 
 	if err != nil {
@@ -79,6 +88,10 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if sl.Deleted == true {
+		w.WriteHeader(http.StatusGone)
+		return
+	}
 
 	w.Header().Set("Location", sl.Link)
 	w.WriteHeader(http.StatusTemporaryRedirect)
@@ -100,11 +113,19 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, "Empty URL", http.StatusBadRequest)
 		return
 	}
-	sl, err := s.ShortLinkService.Save(r.Context(), link)
+
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	sl, err := s.ShortLinkService.Save(ctx, link, userID)
 	status := http.StatusCreated
 	if IsDuplicateError(err) {
 		status = http.StatusConflict
-		sl, err = s.ShortLinkService.GetByLink(r.Context(), link)
+		sl, err = s.ShortLinkService.GetByLink(ctx, link)
 	}
 
 	if err != nil {
@@ -152,8 +173,15 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 			return
 		}
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
 
-	links, err := s.ShortLinkService.SaveBatch(r.Context(), req)
+	links, err := s.ShortLinkService.SaveBatch(ctx, userID, req)
 
 	if err != nil {
 		logger.Log.Infow("Unexpected error while saving short links", "error", err)
@@ -182,4 +210,75 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write(resp)
+}
+
+func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+	links, err := s.ShortLinkService.GetByUserID(ctx, userID)
+	if err != nil {
+		logger.Log.Infow("Unexpected error while getting short link", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	res := make([]model.UserShortLinkResponse, 0, len(links))
+	for _, l := range links {
+		res = append(res, model.UserShortLinkResponse{OriginalURL: l.Link, ShortURL: config.Conf.BaseResultAddr + "/" + l.ID})
+	}
+
+	resp, err := json.Marshal(res)
+	if err != nil {
+		logger.Log.Infow("Enccoding response", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if len(links) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp)
+}
+
+func (s ShortLinkHandler) APIDeleteLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	var req []string
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Infow("Cannot decode request JSON body", "error", err)
+		http.Error(w, "Cannot decode request JSON body", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	// i don't need DOS
+	if len(req) > 200 {
+		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)
+		http.Error(w, "Too many items in batch request", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+		http.Error(w, "UserID not defined or empty", http.StatusBadRequest)
+		return
+	}
+
+	err := s.ShortLinkService.DeleteBatch(ctx, userID, req)
+
+	if err != nil {
+		logger.Log.Infow("Unexpected error while deleting short links", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

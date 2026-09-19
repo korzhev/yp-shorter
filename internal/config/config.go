@@ -25,6 +25,8 @@ type Config struct {
 	LogLevel         string `env:"LOG_LEVEL"`
 	FileStoragePath  string `env:"FILE_STORAGE_PATH"`
 	DBDSN            string `env:"DATABASE_DSN"`
+	TokenExpMinutes  int    `env:"TOKEN_EXP_MINUTES"`
+	TokenSecret      string `env:"TOKEN_SECRET"`
 	StorageType      StorageType
 }
 
@@ -53,7 +55,8 @@ func ParseFlags() error {
 	flag.StringVar(&Conf.FileStoragePath, "f", "", "file storage path")
 	// sslmode=disable for local db in docker
 	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string. format: postgres://user:pass@localhost:5432/db?sslmode=disable")
-
+	flag.IntVar(&Conf.TokenExpMinutes, "te", 5, "token expire time in minutes")
+	flag.StringVar(&Conf.TokenSecret, "ts", "", "token secret")
 	flag.Parse()
 
 	err := env.Parse(&Conf)
