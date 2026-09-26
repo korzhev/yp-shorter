@@ -76,9 +76,9 @@ func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 			// no cookie
 			if err != nil {
 				// random user id 1-100
-				newId := node.Generate()
+				newID := node.Generate()
 				d := time.Minute * time.Duration(c.TokenExpMinutes)
-				t, e := BuildJWTString(d, int(newId.Int64()), c.TokenSecret)
+				t, e := BuildJWTString(d, int(newID.Int64()), c.TokenSecret)
 				if e != nil {
 					http.Error(w, e.Error(), http.StatusInternalServerError)
 					return
@@ -89,7 +89,7 @@ func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 					Value:   t,
 					Expires: time.Now().Add(d),
 				})
-				ctx := context.WithValue(r.Context(), UserIDContextKey, int(newId.Int64()))
+				ctx := context.WithValue(r.Context(), UserIDContextKey, int(newID.Int64()))
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}

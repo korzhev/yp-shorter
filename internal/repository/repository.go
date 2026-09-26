@@ -62,8 +62,8 @@ func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error
 	s.storage.RLock()
 	sl, ok := s.storage.M[short]
 	defer s.storage.RUnlock()
-	if !ok || sl.Deleted == true {
-		return sl, fmt.Errorf("No short link with ID: %s", short)
+	if !ok || sl.Deleted {
+		return sl, fmt.Errorf("no short link with id: %s", short)
 	}
 
 	return sl, nil
@@ -74,12 +74,12 @@ func (s *ShortLinkDB) getByLinkFromMemory(link string) (model.ShortLink, error) 
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.Link == link && v.Deleted == false {
+		if v.Link == link && !v.Deleted {
 			return v, nil
 		}
 	}
 
-	return model.ShortLink{}, fmt.Errorf("No link: %s", link)
+	return model.ShortLink{}, fmt.Errorf("no link: %s", link)
 }
 
 func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, error) {
@@ -88,7 +88,7 @@ func (s *ShortLinkDB) getByUserIDFromMemory(userID int) ([]model.ShortLink, erro
 	defer s.storage.RUnlock()
 
 	for _, v := range s.storage.M {
-		if v.UserID == userID && v.Deleted == false {
+		if v.UserID == userID && !v.Deleted {
 			res = append(res, v)
 		}
 	}
@@ -165,7 +165,7 @@ func (s *ShortLinkDB) GetByLink(ctx context.Context, link string) (model.ShortLi
 }
 
 func (s *ShortLinkDB) GetByUserID(ctx context.Context, userID int) ([]model.ShortLink, error) {
-	res := make([]model.ShortLink, 0)
+	var res []model.ShortLink
 	var err error
 	switch s.storageType {
 	case config.Database:
@@ -230,17 +230,17 @@ func (s *ShortLinkDB) saveInMemory(id, link string, userID int) (model.ShortLink
 func (s *ShortLinkDB) saveFile() error {
 	b, err := json.Marshal(s.storage.M)
 	if err != nil {
-		return fmt.Errorf("Can't marshal data: %v with error: %s", s.storage.M, err.Error())
+		return fmt.Errorf("can't marshal data: %v with error: %s", s.storage.M, err.Error())
 	}
 	if err := s.storage.F.Truncate(0); err != nil {
-		return fmt.Errorf("Can't clean storage: %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("can't clean storage: %s, %s", s.storage.F.Name(), err.Error())
 	}
 
 	if _, err := s.storage.F.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("Can't set cursor:  %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("can't set cursor:  %s, %s", s.storage.F.Name(), err.Error())
 	}
 	if _, err := s.storage.F.Write(b); err != nil {
-		return fmt.Errorf("Can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
+		return fmt.Errorf("can't write to file:  %s, %s", s.storage.F.Name(), err.Error())
 	}
 	return nil
 }
@@ -295,7 +295,7 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink, userID int) ([]
 }
 
 func (s *ShortLinkDB) SaveBatch(ctx context.Context, userID int, batch []model.ShortLink) ([]model.ShortLink, error) {
-	res := make([]model.ShortLink, 0, len(batch))
+	var res []model.ShortLink
 	var err error
 	if s.storageType != config.Database {
 		s.storage.Lock()
@@ -329,7 +329,7 @@ func (s *ShortLinkDB) deleteBatchDatabase(ctx context.Context, shortIDs []string
 func (s *ShortLinkDB) deleteBatchInMemory(shortIDs []string, userID int) error {
 	for _, id := range shortIDs {
 		sl, ok := s.storage.M[id]
-		if ok == true && sl.UserID == userID {
+		if ok && sl.UserID == userID {
 			sl.Deleted = true
 			s.storage.M[id] = sl
 		}
