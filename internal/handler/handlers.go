@@ -17,8 +17,13 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
+type AuditPub interface {
+	Publish(action string, userID int, url string)
+}
+
 type ShortLinkHandler struct {
 	ShortLinkService service.IShortLinkService
+	Audit            AuditPub
 }
 
 func IsDuplicateError(err error) bool {
@@ -71,6 +76,9 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	s.Audit.Publish(model.AuditActionShorten, userID, link)
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
@@ -92,6 +100,12 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		w.WriteHeader(http.StatusGone)
 		return
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
+	if !ok {
+		logger.Log.Infow("UserID not defined or empty", "userID", ctx.Value(middleware.UserIDContextKey))
+	}
+	s.Audit.Publish(model.AuditActionFollow, userID, sl.Link)
 
 	w.Header().Set("Location", sl.Link)
 	w.WriteHeader(http.StatusTemporaryRedirect)
@@ -143,6 +157,8 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	s.Audit.Publish(model.AuditActionShorten, userID, link)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

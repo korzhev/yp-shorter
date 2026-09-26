@@ -27,6 +27,9 @@ type Config struct {
 	DBDSN            string `env:"DATABASE_DSN"`
 	TokenExpMinutes  int    `env:"TOKEN_EXP_MINUTES"`
 	TokenSecret      string `env:"TOKEN_SECRET"`
+	AuditFile        string `env:"AUDIT_FILE
+	"`
+	AuditURL         string `env:"AUDIT_URL"`
 	StorageType      StorageType
 }
 
@@ -57,6 +60,8 @@ func ParseFlags() error {
 	flag.StringVar(&Conf.DBDSN, "d", "", "database dsn string. format: postgres://user:pass@localhost:5432/db?sslmode=disable")
 	flag.IntVar(&Conf.TokenExpMinutes, "te", 5, "token expire time in minutes")
 	flag.StringVar(&Conf.TokenSecret, "ts", "", "token secret")
+	flag.StringVar(&Conf.AuditFile, "audit-file", "", "path to audit file")
+	flag.StringVar(&Conf.TokenSecret, "audit-url", "", "audit URL")
 	flag.Parse()
 
 	err := env.Parse(&Conf)
