@@ -55,13 +55,13 @@ func NewFileAudit(path string) (*FileAudit, error) {
 	}, nil
 }
 
-type HttpClient interface { // http.Client
+type HTTPClient interface { // http.Client
 	Do(req *http.Request) (*http.Response, error)
 }
 
 type HTTPAudit struct {
 	URL    string
-	Client HttpClient
+	Client HTTPClient
 }
 
 func (ha *HTTPAudit) Save(action, userID, url string) error {
