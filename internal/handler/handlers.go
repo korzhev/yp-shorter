@@ -96,7 +96,7 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if sl.Deleted == true {
+	if sl.Deleted {
 		w.WriteHeader(http.StatusGone)
 		return
 	}
