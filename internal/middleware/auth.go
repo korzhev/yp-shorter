@@ -12,17 +12,24 @@ import (
 	"github.com/korzhev/yp-shorter/internal/logger"
 )
 
+// Claims contains the JWT claims used to identify an authenticated user.
 type Claims struct {
+	// RegisteredClaims contains standard JWT metadata, including expiration.
 	jwt.RegisteredClaims
+	// UserID identifies the user associated with the token.
 	UserID int `json:"user_id"`
 }
 
+// AuthMiddleware wraps a handler with cookie-based user authentication.
 type AuthMiddleware func(next http.Handler) http.Handler
 
+// CtxKey is the key type for middleware values stored in a request context.
 type CtxKey string
 
+// UserIDContextKey stores the authenticated user ID as an int in a request context.
 const UserIDContextKey CtxKey = "ctxUserID"
 
+// BuildJWTString signs an HS256 token for id using secret, expiring after d.
 func BuildJWTString(d time.Duration, id int, secret string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -39,6 +46,8 @@ func BuildJWTString(d time.Duration, id int, secret string) (string, error) {
 	return tokenString, nil
 }
 
+// GetUserID verifies an HS256 token using secret and returns its user ID.
+// It logs validation errors and returns zero for an invalid token.
 func GetUserID(tokenString string, secret string) int {
 	claims := &Claims{}
 	// не понял когда указаль передавать, а когда нет
@@ -69,6 +78,9 @@ func GetUserID(tokenString string, secret string) int {
 	return claims.UserID
 }
 
+// NewAuthMiddleware creates middleware that validates the Auth cookie and adds
+// the user ID to the request context. If the cookie is missing, it generates an
+// ID with node and sets a signed cookie. Invalid tokens result in 401 responses.
 func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,9 +88,9 @@ func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 			// no cookie
 			if err != nil {
 				// random user id 1-100
-				newId := node.Generate()
+				newID := node.Generate()
 				d := time.Minute * time.Duration(c.TokenExpMinutes)
-				t, e := BuildJWTString(d, int(newId.Int64()), c.TokenSecret)
+				t, e := BuildJWTString(d, int(newID.Int64()), c.TokenSecret)
 				if e != nil {
 					http.Error(w, e.Error(), http.StatusInternalServerError)
 					return
@@ -89,7 +101,7 @@ func NewAuthMiddleware(c config.Config, node *snowflake.Node) AuthMiddleware {
 					Value:   t,
 					Expires: time.Now().Add(d),
 				})
-				ctx := context.WithValue(r.Context(), UserIDContextKey, int(newId.Int64()))
+				ctx := context.WithValue(r.Context(), UserIDContextKey, int(newID.Int64()))
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}

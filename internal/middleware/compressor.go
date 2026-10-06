@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// CompressorMiddleware wraps a handler with gzip request and response support.
 type CompressorMiddleware func(next http.Handler) http.Handler
 
 // compressWriter implements http.ResponseWriter
@@ -22,12 +23,12 @@ func newCompressWriter(w http.ResponseWriter) *compressWriter {
 	}
 }
 
+// Header returns the underlying response headers.
 func (c *compressWriter) Header() http.Header {
 	return c.w.Header()
 }
 
-// first Write() flushes headers and after that they can't be changed
-// so we check content type to select Response Writer
+// Write compresses JSON and HTML response data and writes other types unchanged.
 func (c *compressWriter) Write(p []byte) (int, error) {
 	if c.shouldCompress() {
 		return c.zw.Write(p)
@@ -35,6 +36,8 @@ func (c *compressWriter) Write(p []byte) (int, error) {
 	return c.w.Write(p)
 }
 
+// WriteHeader sends the status code, setting gzip encoding for JSON and HTML
+// responses when the status code is less than 300.
 func (c *compressWriter) WriteHeader(statusCode int) {
 	if statusCode < 300 && c.shouldCompress() {
 		c.w.Header().Set("Content-Encoding", "gzip")
@@ -42,6 +45,7 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 	c.w.WriteHeader(statusCode)
 }
 
+// Close flushes and closes the gzip writer for JSON and HTML responses.
 func (c *compressWriter) Close() error {
 	if c.shouldCompress() {
 		return c.zw.Close()
@@ -71,10 +75,12 @@ func newCompressReader(r io.ReadCloser) (*compressReader, error) {
 	}, nil
 }
 
+// Read reads decompressed request data into p.
 func (c compressReader) Read(p []byte) (n int, err error) {
 	return c.gr.Read(p)
 }
 
+// Close closes the request body, then the gzip reader if the first close succeeds.
 func (c *compressReader) Close() error {
 	if err := c.r.Close(); err != nil {
 		return err
@@ -82,6 +88,9 @@ func (c *compressReader) Close() error {
 	return c.gr.Close()
 }
 
+// NewCompressorMiddleware creates middleware that decompresses gzip request
+// bodies and compresses JSON and HTML responses when the client accepts gzip.
+// An invalid gzip request header or stream header results in a 400 response.
 func NewCompressorMiddleware() CompressorMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

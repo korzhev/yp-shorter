@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/bwmarrin/snowflake"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -17,7 +18,7 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
-func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node) chi.Router {
+func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node, ap *service.AuditPublisher) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
 			Charset:     c.ShortLinkCharset,
@@ -25,6 +26,7 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 			ShortLinkDB: db,
 			DBSemaphore: s,
 		},
+		Audit: ap,
 	}
 	var PingHandler = handler.PingHandler{
 		Pg: db.DB,
@@ -65,6 +67,8 @@ func main() {
 		"charsetLength", len(config.Conf.ShortLinkCharset),
 		"FileStoragePath", config.Conf.FileStoragePath,
 		"StorageType", config.Conf.StorageType,
+		"AuditFile", config.Conf.AuditFile,
+		"AuditURL", config.Conf.AuditURL,
 	)
 
 	if config.Conf.StorageType == config.Database {
@@ -89,7 +93,32 @@ func main() {
 			"error", err,
 		)
 	}
-	r := RootRouter(config.Conf, db, s, node)
+
+	ap := &service.AuditPublisher{}
+
+	if config.Conf.AuditFile != "" {
+		fa, err := repository.NewFileAudit(config.Conf.AuditFile)
+		if err != nil {
+			logger.Log.Fatalw(
+				"Failed to init file audit",
+				"error", err,
+			)
+		}
+		ap.Register("file", fa)
+	}
+	if config.Conf.AuditURL != "" {
+		ha := repository.NewHTTPAudit(config.Conf.AuditURL)
+		ap.Register("url", ha)
+	}
+
+	r := RootRouter(config.Conf, db, s, node, ap)
+
+	// For profiler
+	go func() {
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+			logger.Log.Errorf("pprof server: %v", err)
+		}
+	}()
 	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
