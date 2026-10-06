@@ -9,10 +9,14 @@ import (
 	"github.com/korzhev/yp-shorter/internal/logger"
 )
 
+// PingHandler handles database health checks.
 type PingHandler struct {
+	// Pg provides the database connectivity check.
 	Pg db.IPG
 }
 
+// PingHandlerFunc checks database connectivity with a three-second timeout.
+// It responds with 200 on success or 500 when the check returns an error.
 func (p PingHandler) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()

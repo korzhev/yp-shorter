@@ -24,11 +24,17 @@ func toAuditLog(action, userID, url string) ([]byte, error) {
 	return json.Marshal(al)
 }
 
+// FileAudit writes audit events as newline-delimited JSON to a file.
+// It must not be copied after first use.
 type FileAudit struct {
+	// Mutex serializes writes to File.
 	sync.Mutex
+	// File is the audit output file; its owner is responsible for closing it.
 	File *os.File
 }
 
+// Save appends a timestamped audit event and a newline to the file.
+// Concurrent calls are serialized by the embedded mutex.
 func (af *FileAudit) Save(action, userID, url string) error {
 	b, err := toAuditLog(action, userID, url)
 	if err != nil {
@@ -44,6 +50,8 @@ func (af *FileAudit) Save(action, userID, url string) error {
 	return nil
 }
 
+// NewFileAudit opens or creates path for appending audit events.
+// The caller must close the returned File after successful use.
 func NewFileAudit(path string) (*FileAudit, error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -55,15 +63,22 @@ func NewFileAudit(path string) (*FileAudit, error) {
 	}, nil
 }
 
+// HTTPClient executes HTTP requests, as implemented by http.Client.
 type HTTPClient interface { // http.Client
+	// Do sends req and returns its response or a transport error.
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// HTTPAudit sends JSON audit events to an HTTP endpoint.
 type HTTPAudit struct {
-	URL    string
+	// URL is the endpoint that receives audit events.
+	URL string
+	// Client executes audit HTTP requests.
 	Client HTTPClient
 }
 
+// Save posts a timestamped JSON audit event to URL.
+// It returns an error on request or response-reading failures and non-2xx statuses.
 func (ha *HTTPAudit) Save(action, userID, url string) error {
 	b, err := toAuditLog(action, userID, url)
 	if err != nil {
@@ -96,6 +111,7 @@ func (ha *HTTPAudit) Save(action, userID, url string) error {
 	return nil
 }
 
+// NewHTTPAudit creates an HTTP audit sink with a 30-second client timeout.
 func NewHTTPAudit(url string) *HTTPAudit {
 	client := &http.Client{
 		Timeout: 30 * time.Second,

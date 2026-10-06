@@ -17,15 +17,22 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
+// AuditPub publishes audit events for short link operations.
 type AuditPub interface {
+	// Publish sends an action, user ID, and original URL to audit subscribers.
 	Publish(action string, userID int, url string)
 }
 
+// ShortLinkHandler handles HTTP requests for short links and publishes audit events.
 type ShortLinkHandler struct {
+	// ShortLinkService performs short link operations.
 	ShortLinkService service.IShortLinkService
-	Audit            AuditPub
+	// Audit receives events for individual link creation and redirects.
+	Audit AuditPub
 }
 
+// IsDuplicateError reports whether err, including a wrapped error, indicates
+// a duplicate original URL in PostgreSQL or in-memory storage.
 func IsDuplicateError(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -44,6 +51,9 @@ func IsDuplicateError(err error) bool {
 	return false
 }
 
+// SaveLinkHandlerFunc shortens the URL in the request body for the context user.
+// It returns a plain-text short URL with 201 for a new link or 409 for a duplicate,
+// publishes a shorten event on success, and returns 400 on invalid input or errors.
 func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -85,6 +95,9 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 	w.Write([]byte(l))
 }
 
+// GetByIDLinkHandlerFunc resolves the id route parameter and redirects with 307.
+// It returns 410 when the service returns a deleted link and 400 on lookup errors
+// or an empty ID. Successful redirects publish a follow event.
 func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -111,6 +124,9 @@ func (s ShortLinkHandler) GetByIDLinkHandlerFunc(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// APISaveLinkHandlerFunc shortens a JSON URL request for the context user.
+// It returns a JSON result with 201 for a new link or 409 for a duplicate,
+// publishes a shorten event on success, and returns 400 on invalid input or errors.
 func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	var req model.ShortLinkRequest
 	dec := json.NewDecoder(r.Body)
@@ -166,6 +182,8 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 
 }
 
+// APISaveLinkBatchHandlerFunc shortens up to 20 JSON batch items for the context
+// user. It returns correlated short URLs with 201, or 400 on invalid input or errors.
 func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	var req []model.ShortLinkBatchItemRequest
 	dec := json.NewDecoder(r.Body)
@@ -228,6 +246,8 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 	w.Write(resp)
 }
 
+// APIGetLinksByUserIDHandlerFunc returns the context user's links as JSON with
+// 200, or 204 if none exist. Missing user IDs and service errors result in 400.
 func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(int)
@@ -264,6 +284,9 @@ func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, 
 	w.Write(resp)
 }
 
+// APIDeleteLinkBatchHandlerFunc accepts a JSON array of up to 200 short IDs for
+// deletion by the context user. It returns 202 when accepted, not when deletion
+// completes, or 400 on invalid input or an immediate service error.
 func (s ShortLinkHandler) APIDeleteLinkBatchHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	var req []string
 	dec := json.NewDecoder(r.Body)

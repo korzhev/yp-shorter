@@ -16,46 +16,64 @@ import (
 	"github.com/korzhev/yp-shorter/internal/model"
 )
 
+// InMemoryDuplicateIDError indicates that a short ID is already stored in memory.
 type InMemoryDuplicateIDError struct {
+	// ID is the conflicting short identifier.
 	ID string
 }
 
+// Error returns a message identifying the conflicting short ID.
 func (e *InMemoryDuplicateIDError) Error() string {
 	return fmt.Sprintf("ID: %s is already used", e.ID)
 }
 
+// NewInMemoryDuplicateIDError creates an error for an already stored short ID.
 func NewInMemoryDuplicateIDError(id string) error {
 	return &InMemoryDuplicateIDError{
 		ID: id,
 	}
 }
 
+// InMemoryDuplicateError indicates that an original URL is already stored in memory.
 type InMemoryDuplicateError struct {
+	// Link is the conflicting original URL.
 	Link string
 }
 
+// Error returns a message identifying the conflicting original URL.
 func (e *InMemoryDuplicateError) Error() string {
 	return fmt.Sprintf("Link: %s is already saved", e.Link)
 }
 
+// NewInMemoryDuplicateError creates an error for an already stored original URL.
 func NewInMemoryDuplicateError(link string) error {
 	return &InMemoryDuplicateError{
 		Link: link,
 	}
 }
 
+// InMemoryStorage maps short IDs to links and requires external synchronization.
 type InMemoryStorage map[string]model.ShortLink
 
+// ShortLinkStorage holds in-memory links and an optional persistence file.
+// It must not be copied after first use.
 type ShortLinkStorage struct {
+	// RWMutex protects access to M and file persistence operations.
 	sync.RWMutex
+	// M stores links keyed by short ID.
 	M InMemoryStorage
+	// F is the persistence file used by the file backend.
 	F *os.File
 }
 
+// ShortLinkDB implements link storage using memory, a JSON file, or PostgreSQL.
+// Construct it with NewShortLinkDB and close it when no longer needed.
+// It must not be copied after first use.
 type ShortLinkDB struct {
 	storage     ShortLinkStorage
 	storageType config.StorageType
-	DB          *sql.DB
+	// DB is the connection pool used by the PostgreSQL backend.
+	DB *sql.DB
 }
 
 func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error) {
@@ -136,6 +154,9 @@ func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]mode
 	return res, err
 }
 
+// GetByShort retrieves a link by short ID from the selected backend.
+// PostgreSQL can return a link marked Deleted; memory and file backends return
+// an error for deleted links. Missing IDs result in an error for all backends.
 func (s *ShortLinkDB) GetByShort(ctx context.Context, short string) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
@@ -150,6 +171,8 @@ func (s *ShortLinkDB) GetByShort(ctx context.Context, short string) (model.Short
 	return sl, err
 }
 
+// GetByLink retrieves a non-deleted link by its original URL.
+// It returns an error if no matching link exists.
 func (s *ShortLinkDB) GetByLink(ctx context.Context, link string) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
@@ -164,6 +187,7 @@ func (s *ShortLinkDB) GetByLink(ctx context.Context, link string) (model.ShortLi
 	return sl, err
 }
 
+// GetByUserID returns non-deleted links owned by userID, with no guaranteed order.
 func (s *ShortLinkDB) GetByUserID(ctx context.Context, userID int) ([]model.ShortLink, error) {
 	var res []model.ShortLink
 	var err error
@@ -245,6 +269,9 @@ func (s *ShortLinkDB) saveFile() error {
 	return nil
 }
 
+// Save stores a short ID and original URL for userID in the selected backend.
+// Duplicate IDs or URLs cause an error. In file mode, a persistence error may
+// occur after the in-memory data has already changed.
 func (s *ShortLinkDB) Save(ctx context.Context, id, link string, userID int) (model.ShortLink, error) {
 	var sl model.ShortLink
 	var err error
@@ -294,6 +321,9 @@ func (s *ShortLinkDB) saveBatchInMemory(batch []model.ShortLink, userID int) ([]
 	return res, nil
 }
 
+// SaveBatch stores the batch's IDs and URLs with userID as their owner.
+// PostgreSQL writes use a transaction; file writes follow in-memory updates.
+// Results must not be treated as successfully persisted when an error is returned.
 func (s *ShortLinkDB) SaveBatch(ctx context.Context, userID int, batch []model.ShortLink) ([]model.ShortLink, error) {
 	var res []model.ShortLink
 	var err error
@@ -337,6 +367,9 @@ func (s *ShortLinkDB) deleteBatchInMemory(shortIDs []string, userID int) error {
 	return nil
 }
 
+// DeleteBatch marks the supplied short IDs as deleted only if owned by userID.
+// Missing IDs and links owned by other users are ignored. In file mode, a
+// persistence error may occur after the in-memory data has already changed.
 func (s *ShortLinkDB) DeleteBatch(ctx context.Context, userID int, batch []string) error {
 	var err error
 	if s.storageType != config.Database {
@@ -360,6 +393,8 @@ func (s *ShortLinkDB) DeleteBatch(ctx context.Context, userID int, batch []strin
 	return err
 }
 
+// Close closes the file or database pool for the selected backend.
+// It is a no-op for the in-memory backend.
 func (s *ShortLinkDB) Close() error {
 	switch s.storageType {
 	case config.File:
@@ -398,6 +433,10 @@ func initDB(dsn string) *sql.DB {
 	return pg
 }
 
+// NewShortLinkDB initializes the backend selected by st, using filePath for file
+// storage or dsn for PostgreSQL. File mode loads existing JSON data into memory.
+// Initialization failures terminate the process via log.Fatal.
+// The caller is responsible for closing the returned repository.
 func NewShortLinkDB(filePath string, dsn string, st config.StorageType) *ShortLinkDB {
 	var file *os.File
 	var pg *sql.DB
