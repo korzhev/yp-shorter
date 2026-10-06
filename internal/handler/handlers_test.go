@@ -24,6 +24,26 @@ import (
 
 const testUserID = 42
 
+type auditPublisherFunc func(action string, userID int, url string)
+
+func (f auditPublisherFunc) Publish(action string, userID int, url string) {
+	f(action, userID, url)
+}
+
+func expectAuditPublish(t *testing.T, action string, userID int, url string) AuditPub {
+	t.Helper()
+	calls := 0
+	t.Cleanup(func() {
+		assert.Equal(t, 1, calls, "expected exactly one audit publication")
+	})
+	return auditPublisherFunc(func(actualAction string, actualUserID int, actualURL string) {
+		calls++
+		assert.Equal(t, action, actualAction)
+		assert.Equal(t, userID, actualUserID)
+		assert.Equal(t, url, actualURL)
+	})
+}
+
 func withUserID(req *http.Request) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), middleware.UserIDContextKey, testUserID))
 }
@@ -103,7 +123,10 @@ func TestIsDuplicateError(t *testing.T) {
 func TestSaveLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
-		h := ShortLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{
+			ShortLinkService: mockService,
+			Audit:            expectAuditPublish(t, model.AuditActionShorten, testUserID, "https://example.com"),
+		}
 
 		link := "https://example.com"
 		ID := "abcde"
@@ -153,7 +176,10 @@ func TestSaveLinkHandler(t *testing.T) {
 
 	t.Run("Duplicate Link", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
-		h := ShortLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{
+			ShortLinkService: mockService,
+			Audit:            expectAuditPublish(t, model.AuditActionShorten, testUserID, "https://example.com"),
+		}
 
 		link := "https://example.com"
 		shortLink := model.ShortLink{ID: "existing-id", Link: link, UserID: testUserID}
@@ -189,7 +215,10 @@ func TestSaveLinkHandler(t *testing.T) {
 func TestGetByIDLinkHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
-		h := ShortLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{
+			ShortLinkService: mockService,
+			Audit:            expectAuditPublish(t, model.AuditActionFollow, 0, "https://example.com"),
+		}
 		r := chi.NewRouter()
 		r.Get("/{id}", h.GetByIDLinkHandlerFunc)
 
@@ -269,7 +298,10 @@ func TestGetByIDLinkHandler(t *testing.T) {
 func TestAPISaveLinkHandlerFunc(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
-		h := ShortLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{
+			ShortLinkService: mockService,
+			Audit:            expectAuditPublish(t, model.AuditActionShorten, testUserID, "https://example.com"),
+		}
 
 		link := "https://example.com"
 		ID := "abcde"
@@ -333,7 +365,10 @@ func TestAPISaveLinkHandlerFunc(t *testing.T) {
 
 	t.Run("Duplicate Link", func(t *testing.T) {
 		mockService := mocks.NewMockIShortLinkService(gomock.NewController(t))
-		h := ShortLinkHandler{ShortLinkService: mockService}
+		h := ShortLinkHandler{
+			ShortLinkService: mockService,
+			Audit:            expectAuditPublish(t, model.AuditActionShorten, testUserID, "https://example.com"),
+		}
 
 		link := "https://example.com"
 		shortLink := model.ShortLink{ID: "existing-id", Link: link, UserID: testUserID}
