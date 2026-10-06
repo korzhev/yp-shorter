@@ -3,53 +3,75 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/http/cookiejar"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bwmarrin/snowflake"
+	"github.com/korzhev/yp-shorter/internal/config"
+	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
+	"github.com/korzhev/yp-shorter/internal/repository"
+	"github.com/korzhev/yp-shorter/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
-// BenchmarkHTTPRoutes requires a running server at http://localhost:8080.
+// BenchmarkHTTPRoutes exercises RootRouter with an isolated in-memory store.
 // Each operation executes 100 scenarios; use -benchtime=1x for exactly 100.
-// The benchmark creates and soft-deletes real records on that server.
 func BenchmarkHTTPRoutes(b *testing.B) {
 	const (
-		baseURL     = "http://localhost:8080"
 		repetitions = 100
 		urlCount    = 100
 		followCount = 10
 		batchSize   = 20
 	)
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	b.Cleanup(transport.CloseIdleConnections)
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   10 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+	c := config.Config{
+		BaseResultAddr:   "http://short.test",
+		ShortLinkCharset: config.DefaultCharset,
+		ShortLinkLength:  6,
+		TokenExpMinutes:  5,
+		TokenSecret:      "router-benchmark-secret",
+		StorageType:      config.InMemory,
 	}
-	request := func(method, path, body, contentType string, status int) ([]byte, http.Header) {
-		b.Helper()
-		req, err := http.NewRequest(method, baseURL+path, strings.NewReader(body))
-		require.NoError(b, err)
+	oldConfig, oldLogger := config.Conf, logger.Log
+	config.Conf = c
+	b.Cleanup(func() {
+		config.Conf = oldConfig
+		logger.Log = oldLogger
+	})
+	require.NoError(b, logger.InitLogger("error"))
+	node, err := snowflake.NewNode(1)
+	require.NoError(b, err)
+	var router http.Handler
+	var cookie *http.Cookie
+	serve := func(method, path, body, contentType string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		if contentType != "" {
 			req.Header.Set("Content-Type", contentType)
 		}
-		res, err := client.Do(req)
-		require.NoError(b, err)
-		data, readErr := io.ReadAll(res.Body)
-		closeErr := res.Body.Close()
-		require.NoError(b, readErr)
-		require.NoError(b, closeErr)
-		require.Equal(b, status, res.StatusCode, "%s %s: %s", method, path, data)
-		return data, res.Header
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		res := httptest.NewRecorder()
+		router.ServeHTTP(res, req)
+		return res
+	}
+	request := func(method, path, body, contentType string, status int) ([]byte, http.Header) {
+		b.Helper()
+		res := serve(method, path, body, contentType)
+		require.Equal(b, status, res.Code, "%s %s: %s", method, path, res.Body.String())
+		if cookie == nil {
+			result := res.Result()
+			cookies := result.Cookies()
+			require.NoError(b, result.Body.Close())
+			require.Len(b, cookies, 1)
+			require.Equal(b, "Auth", cookies[0].Name)
+			cookie = cookies[0]
+		}
+		return res.Body.Bytes(), res.Header()
 	}
 	runID := time.Now().UnixNano()
 	b.ReportAllocs()
@@ -57,10 +79,10 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		for repetition := 0; repetition < repetitions; repetition++ {
 			b.StopTimer()
-			// Isolate user ownership between scenarios, even with soft deletion.
-			jar, err := cookiejar.New(nil)
-			require.NoError(b, err)
-			client.Jar = jar
+			// Avoid accumulating soft-deleted records across scenarios.
+			db := repository.NewShortLinkDB("", "", config.InMemory)
+			router = RootRouter(c, db, service.NewSemaphore(10), node, &service.AuditPublisher{})
+			cookie = nil
 			originals := make([]string, urlCount)
 			for j := range originals {
 				originals[j] = fmt.Sprintf("https://example.com/benchmark/%d/%d/%d/%d", runID, i, repetition, j)
@@ -131,8 +153,7 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 			}
 			require.Empty(b, expected)
 
-			// 5. GET /{id}: resolve 10 distinct URLs on localhost, not the
-			// potentially different host configured in the returned short URLs.
+			// 5. GET /{id}: resolve 10 distinct URLs without following redirects.
 			for j := 0; j < followCount; j++ {
 				_, header := request(http.MethodGet, "/"+ids[j], "", "", http.StatusTemporaryRedirect)
 				require.Equal(b, originals[j], header.Get("Location"))
@@ -148,19 +169,15 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 			// the measured scenario until this user's list is empty.
 			deadline := time.Now().Add(10 * time.Second)
 			for {
-				res, err := client.Get(baseURL + "/api/user/urls")
-				require.NoError(b, err)
-				_, readErr := io.Copy(io.Discard, res.Body)
-				closeErr := res.Body.Close()
-				require.NoError(b, readErr)
-				require.NoError(b, closeErr)
-				if res.StatusCode == http.StatusNoContent {
+				res := serve(http.MethodGet, "/api/user/urls", "", "")
+				if res.Code == http.StatusNoContent {
 					break
 				}
-				require.Equal(b, http.StatusOK, res.StatusCode)
+				require.Equal(b, http.StatusOK, res.Code)
 				require.True(b, time.Now().Before(deadline), "all 100 URLs must be deleted within 10 seconds")
 				time.Sleep(10 * time.Millisecond)
 			}
+			require.NoError(b, db.Close())
 			b.StartTimer()
 		}
 	}
