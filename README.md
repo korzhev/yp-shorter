@@ -14,7 +14,8 @@
 - `go test ./cmd/shortener -run '^$' -bench '^BenchmarkHTTPRoutes$' -benchtime=1x -count=1 -benchmem -memprofile=profiles/base.pprof` - прогон бенчмарка с профилировщиком
 
 ## Результат сравнения двух профилей памяти
-```
+
+```text
 File: main
 Build ID: 07f1f2d4cce5c794c7751d219ba367c1515fa805
 Type: inuse_space

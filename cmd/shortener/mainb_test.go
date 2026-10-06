@@ -53,8 +53,8 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 	}
 	runID := time.Now().UnixNano()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		for repetition := 0; repetition < repetitions; repetition++ {
 			b.StopTimer()
 			// Isolate user ownership between scenarios, even with soft deletion.
