@@ -754,9 +754,9 @@ func TestAPIDeleteLinkBatchHandlerFunc(t *testing.T) {
 
 func init() {
 	// I don't want to do anything with logger singletone
-	err:= logger.InitLogger("error")
+	err := logger.InitLogger("error")
 
-	if err!=nil {
+	if err != nil {
 		fmt.Printf("err: %v", err)
 	}
 }
