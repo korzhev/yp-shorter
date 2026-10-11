@@ -24,8 +24,6 @@ const (
 
 // Config holds application settings loaded from flags and environment variables.
 type Config struct {
-	// ShortLinkLength is the generated ID length in bytes.
-	ShortLinkLength int `env:"SH_LENGTH"`
 	// RunAddr is the HTTP server listen address.
 	RunAddr string `env:"SERVER_ADDRESS"`
 	// BaseResultAddr is the URL prefix used in short link responses.
@@ -38,18 +36,23 @@ type Config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	// DBDSN is the PostgreSQL connection string.
 	DBDSN string `env:"DATABASE_DSN"`
-	// TokenExpMinutes is the authentication token lifetime in minutes.
-	TokenExpMinutes int `env:"TOKEN_EXP_MINUTES"`
+
 	// TokenSecret is the secret used to sign and verify authentication tokens.
 	TokenSecret string `env:"TOKEN_SECRET"`
 	// AuditFile is the path to the audit log file.
 	AuditFile string `env:"AUDIT_FILE"`
 	// AuditURL is the HTTP endpoint receiving audit events.
 	AuditURL string `env:"AUDIT_URL"`
-	// UseProfiler is a flag to enable profiler server
-	UseProfiler bool `env:"USE_PROFILER"`
+
+	// ShortLinkLength is the generated ID length in bytes.
+	ShortLinkLength int `env:"SH_LENGTH"`
+	// TokenExpMinutes is the authentication token lifetime in minutes.
+	TokenExpMinutes int `env:"TOKEN_EXP_MINUTES"`
 	// StorageType is the backend selected by DetectStorageType.
 	StorageType StorageType
+
+	// UseProfiler is a flag to enable profiler server
+	UseProfiler bool `env:"USE_PROFILER"`
 }
 
 // DetectStorageType updates and returns the backend, preferring DBDSN over

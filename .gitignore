@@ -27,3 +27,5 @@ shortenertest
 cmd/shortener/*.json
 *.html
 .env
+
+staticlintcli

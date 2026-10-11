@@ -50,8 +50,8 @@ func withUserID(req *http.Request) *http.Request {
 
 func TestIsDuplicateError(t *testing.T) {
 	tests := []struct {
-		name string
 		err  error
+		name string
 		want bool
 	}{
 		{
@@ -754,5 +754,9 @@ func TestAPIDeleteLinkBatchHandlerFunc(t *testing.T) {
 
 func init() {
 	// I don't want to do anything with logger singletone
-	logger.InitLogger("error")
+	err:= logger.InitLogger("error")
+
+	if err!=nil {
+		fmt.Printf("err: %v", err)
+	}
 }

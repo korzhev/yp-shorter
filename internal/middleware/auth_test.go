@@ -29,7 +29,7 @@ func TestBuildJWTString(t *testing.T) {
 	require.NotEmpty(t, tokenString)
 
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 	require.NoError(t, err)

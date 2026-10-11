@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 
@@ -57,8 +58,11 @@ func main() {
 		return
 	}
 	config.Conf.DetectStorageType()
-	logger.InitLogger(config.Conf.LogLevel)
-	defer logger.Log.Sync()
+	errl := logger.InitLogger(config.Conf.LogLevel)
+	if errl != nil {
+		fmt.Printf("err: %v", err)
+	}
+	defer func() { _ = logger.Log.Sync() }()
 
 	logger.Log.Infow("Server starting with params",
 		"address", config.Conf.RunAddr,
@@ -72,10 +76,10 @@ func main() {
 	)
 
 	if config.Conf.StorageType == config.Database {
-		if err := configdb.InitSchema(config.Conf.DBDSN); err != nil {
+		if schemaErr := configdb.InitSchema(config.Conf.DBDSN); schemaErr != nil {
 			logger.Log.Fatalw(
 				"Failed to apply database migrations",
-				"error", err,
+				"error", schemaErr,
 			)
 		}
 
@@ -83,7 +87,7 @@ func main() {
 	}
 
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	s := service.NewSemaphore(10)
 	node, err := snowflake.NewNode(1)
@@ -97,11 +101,11 @@ func main() {
 	ap := &service.AuditPublisher{}
 
 	if config.Conf.AuditFile != "" {
-		fa, err := repository.NewFileAudit(config.Conf.AuditFile)
-		if err != nil {
+		fa, auditErr := repository.NewFileAudit(config.Conf.AuditFile)
+		if auditErr != nil {
 			logger.Log.Fatalw(
 				"Failed to init file audit",
-				"error", err,
+				"error", auditErr,
 			)
 		}
 		ap.Register("file", fa)
@@ -116,8 +120,8 @@ func main() {
 	// For profiler
 	if config.Conf.UseProfiler {
 		go func() {
-			if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
-				logger.Log.Errorf("pprof server: %v", err)
+			if profilerErr := http.ListenAndServe("127.0.0.1:6060", nil); profilerErr != nil {
+				logger.Log.Errorf("pprof server: %v", profilerErr)
 			}
 		}()
 	}
