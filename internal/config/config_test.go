@@ -19,6 +19,9 @@ var configEnvKeys = []string{
 	"DATABASE_DSN",
 	"TOKEN_EXP_MINUTES",
 	"TOKEN_SECRET",
+	"AUDIT_FILE",
+	"AUDIT_URL",
+	"USE_PROFILER",
 }
 
 func withTestFlagsAndEnv(t *testing.T, args []string, env map[string]string) {
@@ -76,6 +79,8 @@ func TestParseFlags(t *testing.T) {
 		assert.Empty(t, Conf.DBDSN)
 		assert.Equal(t, 5, Conf.TokenExpMinutes)
 		assert.Empty(t, Conf.TokenSecret)
+		assert.Empty(t, Conf.AuditFile)
+		assert.Empty(t, Conf.AuditURL)
 		assert.Equal(t, InMemory, Conf.StorageType)
 	})
 
@@ -91,6 +96,8 @@ func TestParseFlags(t *testing.T) {
 			"-d", "postgres://flag-user:flag-pass@localhost:5432/flag-db",
 			"-te", "30",
 			"-ts", "flag-secret",
+			"-audit-file", "/tmp/flag-audit.json",
+			"-audit-url", "https://flag.example.com/audit",
 		}, nil)
 
 		require.NoError(t, ParseFlags())
@@ -104,6 +111,8 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, "postgres://flag-user:flag-pass@localhost:5432/flag-db", Conf.DBDSN)
 		assert.Equal(t, 30, Conf.TokenExpMinutes)
 		assert.Equal(t, "flag-secret", Conf.TokenSecret)
+		assert.Equal(t, "/tmp/flag-audit.json", Conf.AuditFile)
+		assert.Equal(t, "https://flag.example.com/audit", Conf.AuditURL)
 		assert.Equal(t, Database, Conf.StorageType)
 	})
 
@@ -132,6 +141,8 @@ func TestParseFlags(t *testing.T) {
 			"-d", "postgres://flag-user:flag-pass@localhost:5432/flag-db",
 			"-te", "30",
 			"-ts", "flag-secret",
+			"-audit-file", "/tmp/flag-audit.json",
+			"-audit-url", "https://flag.example.com/audit",
 		}, map[string]string{
 			"SH_CHARSET":        "xyz",
 			"SERVER_ADDRESS":    ":7070",
@@ -142,6 +153,8 @@ func TestParseFlags(t *testing.T) {
 			"DATABASE_DSN":      "postgres://env-user:env-pass@localhost:5432/env-db",
 			"TOKEN_EXP_MINUTES": "60",
 			"TOKEN_SECRET":      "env-secret",
+			"AUDIT_FILE":        "/tmp/env-audit.json",
+			"AUDIT_URL":         "https://env.example.com/audit",
 		})
 
 		require.NoError(t, ParseFlags())
@@ -155,6 +168,8 @@ func TestParseFlags(t *testing.T) {
 		assert.Equal(t, "postgres://env-user:env-pass@localhost:5432/env-db", Conf.DBDSN)
 		assert.Equal(t, 60, Conf.TokenExpMinutes)
 		assert.Equal(t, "env-secret", Conf.TokenSecret)
+		assert.Equal(t, "/tmp/env-audit.json", Conf.AuditFile)
+		assert.Equal(t, "https://env.example.com/audit", Conf.AuditURL)
 		assert.Equal(t, Database, Conf.StorageType)
 	})
 
@@ -189,6 +204,83 @@ func TestParseFlags(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "TokenExpMinutes")
+	})
+}
+
+func TestParseFlagsUseProfiler(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by bare flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by explicit flag value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=true"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("disabled by explicit flag value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=false"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by environment variable", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "true",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("disabled by environment variable", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "false",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("environment disables profiler enabled by flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p"}, map[string]string{
+			"USE_PROFILER": "false",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("environment enables profiler disabled by flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=false"}, map[string]string{
+			"USE_PROFILER": "true",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("returns error for invalid environment value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "not-a-bool",
+		})
+
+		err := ParseFlags()
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "UseProfiler")
 	})
 }
 

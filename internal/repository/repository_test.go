@@ -106,8 +106,7 @@ func TestShortLinkDB_GetById(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		id := "non-existent"
 		result, err := db.GetByShort(ctx, id)
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), fmt.Sprintf("No short link with ID: %s", id))
+		assert.EqualError(t, err, fmt.Sprintf("no short link with id: %s", id))
 		assert.Empty(t, result.ID)
 	})
 }
@@ -131,7 +130,7 @@ func TestShortLinkDB_GetByLink(t *testing.T) {
 		actual, err := db.GetByLink(ctx, link)
 
 		require.Error(t, err)
-		assert.EqualError(t, err, fmt.Sprintf("No link: %s", link))
+		assert.EqualError(t, err, fmt.Sprintf("no link: %s", link))
 		assert.Equal(t, model.ShortLink{}, actual)
 	})
 }
@@ -696,7 +695,7 @@ func TestShortLinkDB_SaveFileErrors(t *testing.T) {
 	actual, err := db.Save(ctx, "abcde", "https://example.com", userID)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Can't clean storage")
+	assert.Contains(t, err.Error(), "can't clean storage")
 	assert.Equal(t, model.ShortLink{ID: "abcde", Link: "https://example.com", UserID: userID}, actual)
 }
 

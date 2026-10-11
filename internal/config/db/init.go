@@ -8,6 +8,8 @@ import (
 	"github.com/korzhev/yp-shorter/migrations"
 )
 
+// InitSchema applies embedded upward migrations to the database at dsn.
+// It returns nil when the schema is already up to date.
 func InitSchema(dsn string) error {
 	source, err := iofs.New(migrations.Files, ".")
 	if err != nil {

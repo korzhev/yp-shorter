@@ -11,13 +11,13 @@
 
 Чтобы иметь возможность получать обновления автотестов и других частей шаблона, выполните команду:
 
-```
+```bash
 git remote add -m v2 template https://github.com/Yandex-Practicum/go-musthave-shortener-tpl.git
 ```
 
 Для обновления кода автотестов выполните команду:
 
-```
+```bash
 git fetch template && git checkout template/v2 .github
 ```
 
@@ -38,6 +38,7 @@ git fetch template && git checkout template/v2 .github
 Это лишь пример организации кода, который поможет вам в реализации сервиса.
 
 При необходимости можно вносить изменения в структуру проекта, использовать любые библиотеки и предпочитаемые структурные паттерны организации кода приложения, например:
+
 - **DDD** (Domain-Driven Design)
 - **Clean Architecture**
 - **Hexagonal Architecture**

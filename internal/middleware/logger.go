@@ -8,8 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// LoggerMiddleware wraps a handler with request and response logging.
 type LoggerMiddleware func(next http.Handler) http.Handler
 
+// NewLoggerMiddleware creates middleware that logs the request URI, method,
+// response status, elapsed time, and response size using sugar.
 func NewLoggerMiddleware(sugar *zap.SugaredLogger) LoggerMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
