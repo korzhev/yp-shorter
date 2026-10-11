@@ -19,9 +19,9 @@ import (
 
 // MockIShortLinkService is a mock of IShortLinkService interface.
 type MockIShortLinkService struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockIShortLinkServiceMockRecorder
-	isgomock struct{}
 }
 
 // MockIShortLinkServiceMockRecorder is the mock recorder for MockIShortLinkService.

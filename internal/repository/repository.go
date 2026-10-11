@@ -58,22 +58,22 @@ type InMemoryStorage map[string]model.ShortLink
 // ShortLinkStorage holds in-memory links and an optional persistence file.
 // It must not be copied after first use.
 type ShortLinkStorage struct {
-	// RWMutex protects access to M and file persistence operations.
-	sync.RWMutex
 	// M stores links keyed by short ID.
 	M InMemoryStorage
 	// F is the persistence file used by the file backend.
 	F *os.File
+	// RWMutex protects access to M and file persistence operations.
+	sync.RWMutex
 }
 
 // ShortLinkDB implements link storage using memory, a JSON file, or PostgreSQL.
 // Construct it with NewShortLinkDB and close it when no longer needed.
 // It must not be copied after first use.
 type ShortLinkDB struct {
+	// DB is the connection pool used by the PostgreSQL backend.
+	DB          *sql.DB
 	storage     ShortLinkStorage
 	storageType config.StorageType
-	// DB is the connection pool used by the PostgreSQL backend.
-	DB *sql.DB
 }
 
 func (s *ShortLinkDB) getByShortFromMemory(short string) (model.ShortLink, error) {
@@ -133,7 +133,7 @@ func (s *ShortLinkDB) getByUserIDFromDB(ctx context.Context, userID int) ([]mode
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	res := make([]model.ShortLink, 0)
 	for rows.Next() {
@@ -219,7 +219,7 @@ func (s *ShortLinkDB) saveBatchDatabase(ctx context.Context, batch []model.Short
 	}
 	for _, item := range batch {
 		sl := model.ShortLink{ID: item.ID, Link: item.Link, UserID: userID}
-		_, err := tx.ExecContext(ctx, "INSERT INTO short_links (short, link, user_id) VALUES ($1, $2, $3)", item.ID, item.Link, userID)
+		_, err = tx.ExecContext(ctx, "INSERT INTO short_links (short, link, user_id) VALUES ($1, $2, $3)", item.ID, item.Link, userID)
 		if err != nil {
 			if rerr := tx.Rollback(); rerr != nil {
 				return nil, rerr

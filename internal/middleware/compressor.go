@@ -101,7 +101,7 @@ func NewCompressorMiddleware() CompressorMiddleware {
 			if supportsGzip {
 				cw := newCompressWriter(ww)
 				ww = cw
-				defer cw.Close()
+				defer func() { _ = cw.Close() }()
 			}
 
 			contentEncoding := r.Header.Get("Content-Encoding")
@@ -113,7 +113,7 @@ func NewCompressorMiddleware() CompressorMiddleware {
 					return
 				}
 				r.Body = cr
-				defer cr.Close()
+				defer func() { _ = cr.Close() }()
 			}
 			next.ServeHTTP(ww, r)
 		})

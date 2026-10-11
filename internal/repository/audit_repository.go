@@ -27,10 +27,11 @@ func toAuditLog(action, userID, url string) ([]byte, error) {
 // FileAudit writes audit events as newline-delimited JSON to a file.
 // It must not be copied after first use.
 type FileAudit struct {
-	// Mutex serializes writes to File.
-	sync.Mutex
 	// File is the audit output file; its owner is responsible for closing it.
 	File *os.File
+
+	// Mutex serializes writes to File.
+	sync.Mutex
 }
 
 // Save appends a timestamped audit event and a newline to the file.
@@ -71,10 +72,10 @@ type HTTPClient interface { // http.Client
 
 // HTTPAudit sends JSON audit events to an HTTP endpoint.
 type HTTPAudit struct {
-	// URL is the endpoint that receives audit events.
-	URL string
 	// Client executes audit HTTP requests.
 	Client HTTPClient
+	// URL is the endpoint that receives audit events.
+	URL string
 }
 
 // Save posts a timestamped JSON audit event to URL.
@@ -98,7 +99,7 @@ func (ha *HTTPAudit) Save(action, userID, url string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB
 	if err != nil {

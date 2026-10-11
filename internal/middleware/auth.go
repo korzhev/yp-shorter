@@ -54,7 +54,7 @@ func GetUserID(tokenString string, secret string) int {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		claims,
-		func(t *jwt.Token) (interface{}, error) {
+		func(t *jwt.Token) (any, error) {
 			if t.Method != jwt.SigningMethodHS256 {
 				return nil, fmt.Errorf(
 					"unexpected signing method: %s",
