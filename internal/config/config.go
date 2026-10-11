@@ -46,6 +46,8 @@ type Config struct {
 	AuditFile string `env:"AUDIT_FILE"`
 	// AuditURL is the HTTP endpoint receiving audit events.
 	AuditURL string `env:"AUDIT_URL"`
+	// UseProfiler is a flag to enable profiler server
+	UseProfiler bool `env:"USE_PROFILER"`
 	// StorageType is the backend selected by DetectStorageType.
 	StorageType StorageType
 }
@@ -85,6 +87,7 @@ func ParseFlags() error {
 	flag.StringVar(&Conf.TokenSecret, "ts", "", "token secret")
 	flag.StringVar(&Conf.AuditFile, "audit-file", "", "path to audit file")
 	flag.StringVar(&Conf.AuditURL, "audit-url", "", "audit URL")
+	flag.BoolVar(&Conf.UseProfiler, "p", false, "enable profiler")
 	flag.Parse()
 
 	err := env.Parse(&Conf)

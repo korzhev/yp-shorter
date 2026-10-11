@@ -114,11 +114,13 @@ func main() {
 	r := RootRouter(config.Conf, db, s, node, ap)
 
 	// For profiler
-	go func() {
-		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
-			logger.Log.Errorf("pprof server: %v", err)
-		}
-	}()
+	if config.Conf.UseProfiler {
+		go func() {
+			if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+				logger.Log.Errorf("pprof server: %v", err)
+			}
+		}()
+	}
 	err = http.ListenAndServe(config.Conf.RunAddr, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)

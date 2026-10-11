@@ -21,6 +21,7 @@ var configEnvKeys = []string{
 	"TOKEN_SECRET",
 	"AUDIT_FILE",
 	"AUDIT_URL",
+	"USE_PROFILER",
 }
 
 func withTestFlagsAndEnv(t *testing.T, args []string, env map[string]string) {
@@ -203,6 +204,83 @@ func TestParseFlags(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "TokenExpMinutes")
+	})
+}
+
+func TestParseFlagsUseProfiler(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by bare flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by explicit flag value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=true"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("disabled by explicit flag value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=false"}, nil)
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("enabled by environment variable", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "true",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("disabled by environment variable", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "false",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("environment disables profiler enabled by flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p"}, map[string]string{
+			"USE_PROFILER": "false",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.False(t, Conf.UseProfiler)
+	})
+
+	t.Run("environment enables profiler disabled by flag", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-p=false"}, map[string]string{
+			"USE_PROFILER": "true",
+		})
+
+		require.NoError(t, ParseFlags())
+		assert.True(t, Conf.UseProfiler)
+	})
+
+	t.Run("returns error for invalid environment value", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener"}, map[string]string{
+			"USE_PROFILER": "not-a-bool",
+		})
+
+		err := ParseFlags()
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "UseProfiler")
 	})
 }
 

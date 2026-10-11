@@ -53,9 +53,9 @@ func (af *FileAudit) Save(action, userID, url string) error {
 // NewFileAudit opens or creates path for appending audit events.
 // The caller must close the returned File after successful use.
 func NewFileAudit(path string) (*FileAudit, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
-		return &FileAudit{}, err
+		return nil, err
 	}
 
 	return &FileAudit{
@@ -106,7 +106,7 @@ func (ha *HTTPAudit) Save(action, userID, url string) error {
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("HttpError(%v) response: %s", resp.StatusCode, string(responseBody))
+		return fmt.Errorf("httpError(%v) response: %s", resp.StatusCode, string(responseBody))
 	}
 	return nil
 }

@@ -110,8 +110,7 @@ func TestNewFileAuditInvalidPath(t *testing.T) {
 	audit, err := NewFileAudit(path)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, os.ErrNotExist)
-	require.NotNil(t, audit)
-	assert.Nil(t, audit.File)
+	assert.Nil(t, audit)
 }
 
 func TestFileAuditSaveWritesJSONLine(t *testing.T) {
@@ -275,7 +274,7 @@ func TestHTTPAuditSaveRejectsStatusBelowOK(t *testing.T) {
 	audit := &HTTPAudit{URL: "https://audit.example.com", Client: auditHTTPClientFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 199, Body: body}, nil
 	})}
-	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "HttpError(199) response: informational response")
+	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "httpError(199) response: informational response")
 	assert.True(t, body.closed)
 }
 
@@ -284,7 +283,7 @@ func TestHTTPAuditSaveRejectsRedirect(t *testing.T) {
 	audit := &HTTPAudit{URL: "https://audit.example.com", Client: auditHTTPClientFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusMultipleChoices, Body: body}, nil
 	})}
-	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "HttpError(300) response: multiple choices")
+	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "httpError(300) response: multiple choices")
 	assert.True(t, body.closed)
 }
 
@@ -293,7 +292,7 @@ func TestHTTPAuditSaveServerError(t *testing.T) {
 	audit := &HTTPAudit{URL: "https://audit.example.com", Client: auditHTTPClientFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: body}, nil
 	})}
-	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "HttpError(503) response: service unavailable")
+	assert.EqualError(t, audit.Save("shorten", "user-42", "https://example.com"), "httpError(503) response: service unavailable")
 	assert.True(t, body.closed)
 }
 
@@ -306,7 +305,7 @@ func TestHTTPAuditSaveLimitsResponseBody(t *testing.T) {
 	})}
 	err := audit.Save("shorten", "user-42", "https://example.com")
 	require.Error(t, err)
-	assert.Equal(t, "HttpError(400) response: "+strings.Repeat("x", limit), err.Error())
+	assert.Equal(t, "httpError(400) response: "+strings.Repeat("x", limit), err.Error())
 	assert.Equal(t, len("unread suffix"), reader.Len())
 	assert.True(t, body.closed)
 }
