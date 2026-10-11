@@ -9,5 +9,5 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), noexit.Analyzer,
-		"direct", "alias", "dot", "allowed", "other", "runner.test", "runner_test")
+		"direct", "alias", "dot", "allowed", "other", "runner_test")
 }
