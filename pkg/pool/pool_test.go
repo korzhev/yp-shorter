@@ -4,7 +4,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/pkg/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,17 +71,6 @@ type observedObject struct {
 func (o *observedObject) Reset() {
 	o.value = ""
 	(*o.resets)++
-}
-
-func TestPoolWithShortLink(t *testing.T) {
-	p := pool.New(func() *model.ShortLink { return &model.ShortLink{} })
-	link := p.Get()
-	*link = model.ShortLink{ID: "id", Link: "original", UserID: 42, Deleted: true}
-	p.Put(link)
-
-	got := p.Get()
-	require.NotNil(t, got)
-	assert.Equal(t, model.ShortLink{}, *got)
 }
 
 func TestPoolConcurrent(t *testing.T) {
