@@ -2,6 +2,7 @@ package model
 
 import "context"
 
+// generate:reset
 // ShortLink associates a short ID with an original URL and its owner.
 type ShortLink struct {
 	// ID is the short identifier, without the base URL.

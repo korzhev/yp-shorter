@@ -7,6 +7,7 @@ const (
 	AuditActionShorten = "shorten"
 )
 
+// generate:reset
 // AuditLog is the JSON representation of a URL audit event.
 type AuditLog struct {
 	// Action identifies the operation, such as follow or shorten.

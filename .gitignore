@@ -28,5 +28,5 @@ shortenertest
 cmd/shortener/*.json
 *.html
 .env
-
+reset.gen.go
 staticlintcli
