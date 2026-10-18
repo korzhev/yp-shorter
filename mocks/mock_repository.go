@@ -19,9 +19,9 @@ import (
 
 // MockIShortLinkRepository is a mock of IShortLinkRepository interface.
 type MockIShortLinkRepository struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockIShortLinkRepositoryMockRecorder
-	isgomock struct{}
 }
 
 // MockIShortLinkRepositoryMockRecorder is the mock recorder for MockIShortLinkRepository.
