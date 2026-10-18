@@ -39,7 +39,7 @@ func exampleCreateURL(client *http.Client) string {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		panic(err)
@@ -59,7 +59,7 @@ func ExampleRootRouter_shortenText() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		panic(err)
@@ -77,7 +77,7 @@ func ExampleRootRouter_redirect() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	fmt.Println(res.Status)
 	fmt.Println(res.Header.Get("Location"))
 }
@@ -91,7 +91,7 @@ func ExampleRootRouter_shortenJSON() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusCreated && res.StatusCode != http.StatusConflict {
 		panic(res.Status)
 	}
@@ -118,7 +118,7 @@ func ExampleRootRouter_shortenBatch() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusCreated {
 		panic(res.Status)
 	}
@@ -145,7 +145,7 @@ func ExampleRootRouter_userURLs() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	fmt.Println(res.Status)
 	if res.StatusCode == http.StatusNoContent {
 		return // No links; the response has no JSON body.
@@ -189,7 +189,7 @@ func ExampleRootRouter_deleteUserURLs() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	fmt.Println(res.Status)
 }
 
@@ -202,6 +202,6 @@ func ExampleRootRouter_ping() {
 	if err != nil {
 		panic(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	fmt.Println(res.Status)
 }
