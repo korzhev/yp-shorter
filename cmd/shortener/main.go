@@ -19,6 +19,12 @@ import (
 	"github.com/korzhev/yp-shorter/internal/service"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node, ap *service.AuditPublisher) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
 		ShortLinkService: service.ShortLinkService{
@@ -51,7 +57,18 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 	return r
 }
 
+func buildStringer(b string) string {
+	if b == "" {
+		return "N/A"
+	}
+	return b
+}
+
 func main() {
+	fmt.Printf("Build version: %s\n", buildStringer(buildVersion))
+	fmt.Printf("Build date: %s\n", buildStringer(buildDate))
+	fmt.Printf("Build commit: %s\n", buildStringer(buildCommit))
+
 	err := config.ParseFlags()
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
