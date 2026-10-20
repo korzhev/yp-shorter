@@ -169,7 +169,7 @@ func TestFileAuditSaveConcurrent(t *testing.T) {
 	const count = 50
 	errs := make(chan error, count)
 	var wg sync.WaitGroup
-	for i := 0; i < count; i++ {
+	for i := range count {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -195,7 +195,7 @@ func TestFileAuditSaveConcurrent(t *testing.T) {
 		assert.False(t, seen[entry.UserID], "duplicate user ID %s", entry.UserID)
 		seen[entry.UserID] = true
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		assert.True(t, seen[fmt.Sprint(i)])
 	}
 }
@@ -216,7 +216,7 @@ func TestHTTPAuditSaveSendsJSON(t *testing.T) {
 		URL: "https://audit.example.com/events",
 		Client: auditHTTPClientFunc(func(req *http.Request) (*http.Response, error) {
 			called = true
-			defer req.Body.Close()
+			defer func() { _ = req.Body.Close() }()
 			assert.Equal(t, http.MethodPost, req.Method)
 			assert.Equal(t, "https://audit.example.com/events", req.URL.String())
 			assert.Equal(t, "application/json", req.Header.Get("Content-Type"))

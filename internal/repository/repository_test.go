@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -427,9 +428,7 @@ func TestShortLinkDB_DeleteBatch(t *testing.T) {
 
 	cloneStorage := func(source InMemoryStorage) InMemoryStorage {
 		clone := make(InMemoryStorage, len(source))
-		for id, shortLink := range source {
-			clone[id] = shortLink
-		}
+		maps.Copy(clone, source)
 		return clone
 	}
 

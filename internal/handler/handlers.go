@@ -34,15 +34,13 @@ type ShortLinkHandler struct {
 // IsDuplicateError reports whether err, including a wrapped error, indicates
 // a duplicate original URL in PostgreSQL or in-memory storage.
 func IsDuplicateError(err error) bool {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		// uniq index error
 		if pgErr.Code == "23505" && pgErr.ConstraintName == "short_links_link_uidx" {
 			return true
 		}
 	}
-	var dError *repository.InMemoryDuplicateError
-	if errors.As(err, &dError) {
+	if dError, ok := errors.AsType[*repository.InMemoryDuplicateError](err); ok {
 		if dError.Link != "" {
 			return true
 		}
@@ -60,7 +58,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	link := string(body)
 	if link == "" {
 		http.Error(w, "Empty body", http.StatusBadRequest)
@@ -92,7 +90,7 @@ func (s ShortLinkHandler) SaveLinkHandlerFunc(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	l := fmt.Sprintf("%s/%s", config.Conf.BaseResultAddr, sl.ID)
-	w.Write([]byte(l))
+	_, _ = w.Write([]byte(l))
 }
 
 // GetByIDLinkHandlerFunc resolves the id route parameter and redirects with 307.
@@ -136,7 +134,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	link := req.URL
 	if link == "" {
 		logger.Log.Infow("Empty URL")
@@ -178,7 +176,7 @@ func (s ShortLinkHandler) APISaveLinkHandlerFunc(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(resp)
+	_, _ = w.Write(resp)
 
 }
 
@@ -193,7 +191,7 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	// i don't need DOS
 	if len(req) > 20 {
 		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)
@@ -243,7 +241,7 @@ func (s ShortLinkHandler) APISaveLinkBatchHandlerFunc(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write(resp)
+	_, _ = w.Write(resp)
 }
 
 // APIGetLinksByUserIDHandlerFunc returns the context user's links as JSON with
@@ -281,7 +279,7 @@ func (s ShortLinkHandler) APIGetLinksByUserIDHandlerFunc(w http.ResponseWriter, 
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+	_, _ = w.Write(resp)
 }
 
 // APIDeleteLinkBatchHandlerFunc accepts a JSON array of up to 200 short IDs for
@@ -296,7 +294,7 @@ func (s ShortLinkHandler) APIDeleteLinkBatchHandlerFunc(w http.ResponseWriter, r
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	// i don't need DOS
 	if len(req) > 200 {
 		logger.Log.Infow("Request too long", "ShortLinkBatchRequest", req)

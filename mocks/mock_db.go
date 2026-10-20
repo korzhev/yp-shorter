@@ -18,9 +18,9 @@ import (
 
 // MockIPG is a mock of IPG interface.
 type MockIPG struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockIPGMockRecorder
-	isgomock struct{}
 }
 
 // MockIPGMockRecorder is the mock recorder for MockIPG.
