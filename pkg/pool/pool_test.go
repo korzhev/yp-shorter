@@ -38,9 +38,12 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewNilFactory(t *testing.T) {
-	assert.PanicsWithValue(t, "pool: nil factory", func() {
-		pool.New[*object](nil)
-	})
+	p := pool.New[*object](nil)
+	assert.Nil(t, p.Get())
+	assert.Nil(t, p.Get())
+
+	interfacePool := pool.New[interface{ Reset() }](nil)
+	assert.Nil(t, interfacePool.Get())
 }
 
 func TestPutResetsObject(t *testing.T) {

@@ -20,9 +20,9 @@ import (
 )
 
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node, ap *service.AuditPublisher) chi.Router {
@@ -57,17 +57,10 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 	return r
 }
 
-func buildStringer(b string) string {
-	if b == "" {
-		return "N/A"
-	}
-	return b
-}
-
 func main() {
-	fmt.Printf("Build version: %s\n", buildStringer(buildVersion))
-	fmt.Printf("Build date: %s\n", buildStringer(buildDate))
-	fmt.Printf("Build commit: %s\n", buildStringer(buildCommit))
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
 
 	err := config.ParseFlags()
 	if err != nil {
@@ -77,7 +70,7 @@ func main() {
 	config.Conf.DetectStorageType()
 	errl := logger.InitLogger(config.Conf.LogLevel)
 	if errl != nil {
-		fmt.Printf("err: %v", err)
+		fmt.Printf("err: %v", errl)
 	}
 	defer func() { _ = logger.Log.Sync() }()
 

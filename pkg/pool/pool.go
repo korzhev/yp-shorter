@@ -12,11 +12,12 @@ type Pool[T interface{ Reset() }] struct {
 }
 
 // New creates a pool using factory when no reusable object is available.
-// The factory must be non-nil, safe for concurrent calls, and return an object
+// A nil factory makes Get return the zero value of T when the pool is empty.
+// A non-nil factory must be safe for concurrent calls and return an object
 // ready for use (not a nil pointer).
 func New[T interface{ Reset() }](factory func() T) *Pool[T] {
 	if factory == nil {
-		panic("pool: nil factory")
+		return &Pool[T]{}
 	}
 	return &Pool[T]{
 		pool: sync.Pool{
@@ -26,9 +27,14 @@ func New[T interface{ Reset() }](factory func() T) *Pool[T] {
 }
 
 // Get returns a pooled object or creates one using the factory.
+// Without a factory, an empty pool returns the zero value of T.
 // The caller owns the object until it is returned with Put.
 func (p *Pool[T]) Get() T {
-	return p.pool.Get().(T)
+	if object := p.pool.Get(); object != nil {
+		return object.(T)
+	}
+	var zero T
+	return zero
 }
 
 // Put resets an object and returns it to the pool.
