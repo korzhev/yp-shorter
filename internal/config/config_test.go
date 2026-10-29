@@ -22,6 +22,9 @@ var configEnvKeys = []string{
 	"AUDIT_FILE",
 	"AUDIT_URL",
 	"USE_PROFILER",
+	"ENABLE_HTTPS",
+	"TLS_CERT_FILE",
+	"TLS_KEY_FILE",
 }
 
 func withTestFlagsAndEnv(t *testing.T, args []string, env map[string]string) {
@@ -204,6 +207,54 @@ func TestParseFlags(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "TokenExpMinutes")
+	})
+}
+
+func TestParseFlagsHTTPS(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		env       map[string]string
+		want      bool
+		wantError bool
+	}{
+		{name: "disabled by default"},
+		{name: "bare flag", args: []string{"-s"}, want: true},
+		{name: "explicit true", args: []string{"-s=true"}, want: true},
+		{name: "explicit false", args: []string{"-s=false"}},
+		{name: "environment true", env: map[string]string{"ENABLE_HTTPS": "true"}, want: true},
+		{name: "environment false", env: map[string]string{"ENABLE_HTTPS": "false"}},
+		{name: "environment disables flag", args: []string{"-s"}, env: map[string]string{"ENABLE_HTTPS": "false"}},
+		{name: "environment enables flag", args: []string{"-s=false"}, env: map[string]string{"ENABLE_HTTPS": "true"}, want: true},
+		{name: "invalid environment", env: map[string]string{"ENABLE_HTTPS": "invalid"}, wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withTestFlagsAndEnv(t, append([]string{"shortener"}, tt.args...), tt.env)
+			err := ParseFlags()
+			if tt.wantError {
+				require.ErrorContains(t, err, "EnableHTTPS")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, Conf.EnableHTTPS)
+			assert.Equal(t, "cert.pem", Conf.TLSCertFile)
+			assert.Equal(t, "key.pem", Conf.TLSKeyFile)
+		})
+	}
+	t.Run("certificate flags", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-tls-cert", "flag-cert.pem", "-tls-key", "flag-key.pem"}, nil)
+		require.NoError(t, ParseFlags())
+		assert.Equal(t, "flag-cert.pem", Conf.TLSCertFile)
+		assert.Equal(t, "flag-key.pem", Conf.TLSKeyFile)
+	})
+	t.Run("certificate environment overrides flags", func(t *testing.T) {
+		withTestFlagsAndEnv(t, []string{"shortener", "-tls-cert", "flag-cert.pem", "-tls-key", "flag-key.pem"}, map[string]string{
+			"TLS_CERT_FILE": "env-cert.pem", "TLS_KEY_FILE": "env-key.pem",
+		})
+		require.NoError(t, ParseFlags())
+		assert.Equal(t, "env-cert.pem", Conf.TLSCertFile)
+		assert.Equal(t, "env-key.pem", Conf.TLSKeyFile)
 	})
 }
 
