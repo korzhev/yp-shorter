@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 
@@ -24,6 +26,22 @@ var (
 	buildDate    = "N/A"
 	buildCommit  = "N/A"
 )
+
+// newServerListener opens the application listener, using TLS only when enabled.
+func newServerListener(c config.Config) (net.Listener, error) {
+	if !c.EnableHTTPS {
+		return net.Listen("tcp", c.RunAddr)
+	}
+
+	certificate, err := tls.LoadX509KeyPair(c.TLSCertFile, c.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load HTTPS certificate and key: %w", err)
+	}
+	return tls.Listen("tcp", c.RunAddr, &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS12,
+	})
+}
 
 func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node, ap *service.AuditPublisher) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
@@ -76,6 +94,7 @@ func main() {
 
 	logger.Log.Infow("Server starting with params",
 		"address", config.Conf.RunAddr,
+		"enableHTTPS", config.Conf.EnableHTTPS,
 		"baseUrl", config.Conf.BaseResultAddr,
 		"shortlinkLength", config.Conf.ShortLinkLength,
 		"charsetLength", len(config.Conf.ShortLinkCharset),
@@ -135,7 +154,12 @@ func main() {
 			}
 		}()
 	}
-	err = http.ListenAndServe(config.Conf.RunAddr, r)
+	listener, err := newServerListener(config.Conf)
+	if err != nil {
+		logger.Log.Errorf("Error starting server: %s\n", err)
+		return
+	}
+	err = http.Serve(listener, r)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
 	}

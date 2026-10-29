@@ -26,6 +26,12 @@ const (
 type Config struct {
 	// RunAddr is the HTTP server listen address.
 	RunAddr string `env:"SERVER_ADDRESS"`
+	// EnableHTTPS enables TLS for the application server.
+	EnableHTTPS bool `env:"ENABLE_HTTPS"`
+	// TLSCertFile is the path to the PEM-encoded server certificate chain.
+	TLSCertFile string `env:"TLS_CERT_FILE"`
+	// TLSKeyFile is the path to the PEM-encoded server private key.
+	TLSKeyFile string `env:"TLS_KEY_FILE"`
 	// BaseResultAddr is the URL prefix used in short link responses.
 	BaseResultAddr string `env:"BASE_URL"`
 	// ShortLinkCharset contains the bytes available for ID generation.
@@ -80,6 +86,9 @@ var Conf Config
 func ParseFlags() error {
 	flag.StringVar(&Conf.ShortLinkCharset, "c", DefaultCharset, "chars to use in id generator")
 	flag.StringVar(&Conf.RunAddr, "a", ":8080", "address and port to run server")
+	flag.BoolVar(&Conf.EnableHTTPS, "s", false, "enable HTTPS")
+	flag.StringVar(&Conf.TLSCertFile, "tls-cert", "cert.pem", "path to TLS certificate PEM file")
+	flag.StringVar(&Conf.TLSKeyFile, "tls-key", "key.pem", "path to TLS private key PEM file")
 	flag.StringVar(&Conf.BaseResultAddr, "b", "http://localhost:8080", "base url for short link")
 	flag.IntVar(&Conf.ShortLinkLength, "l", 6, "short link id length, max length 12")
 	flag.StringVar(&Conf.LogLevel, "ll", "info", "log level")
