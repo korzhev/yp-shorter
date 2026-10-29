@@ -13,6 +13,19 @@
 - `go test -count=1 ./...` - прогон тестов
 - `go test ./cmd/shortener -run '^$' -bench '^BenchmarkHTTPRoutes$' -benchtime=1x -count=1 -benchmem -memprofile=profiles/base.pprof` - прогон бенчмарка с профилировщиком
 
+## Метаданные сборки
+
+Версия, дата и коммит выводятся при запуске. Без параметров сборки каждое
+значение равно `N/A`. Передать их можно через `-ldflags` и флаг `-X`:
+
+```sh
+go build -ldflags "-X main.buildVersion=1.0.0 -X main.buildDate=2026-10-27T12:00:00Z -X main.buildCommit=bd711e9" -o shortener ./cmd/shortener
+```
+
+Замените значения на версию релиза, дату сборки и хеш коммита вашего исходного
+кода (`git rev-parse --short HEAD`). Каждый флаг `-X` задаёт одну строковую
+переменную пакета `main`.
+
 ## Результат сравнения двух профилей памяти
 
 ```text

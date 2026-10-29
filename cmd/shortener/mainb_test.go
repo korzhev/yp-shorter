@@ -77,7 +77,7 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; b.Loop(); i++ {
-		for repetition := 0; repetition < repetitions; repetition++ {
+		for repetition := range repetitions {
 			b.StopTimer()
 			// Avoid accumulating soft-deleted records across scenarios.
 			db := repository.NewShortLinkDB("", "", config.InMemory)
@@ -99,8 +99,8 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 			batchBodies := make([]string, 0, (len(batch)+batchSize-1)/batchSize)
 			for start := 0; start < len(batch); start += batchSize {
 				end := min(start+batchSize, len(batch))
-				batchBody, err := json.Marshal(batch[start:end])
-				require.NoError(b, err)
+				batchBody, marshalErr := json.Marshal(batch[start:end])
+				require.NoError(b, marshalErr)
 				batchBodies = append(batchBodies, string(batchBody))
 			}
 			b.StartTimer()
@@ -132,8 +132,8 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 			ids := make([]string, urlCount)
 			expected := make(map[string]string, urlCount)
 			for j, shortURL := range shortURLs {
-				parsed, err := url.Parse(shortURL)
-				require.NoError(b, err)
+				parsed, parseErr := url.Parse(shortURL)
+				require.NoError(b, parseErr)
 				require.NotEmpty(b, parsed.Host)
 				ids[j] = strings.TrimPrefix(parsed.Path, "/")
 				require.NotEmpty(b, ids[j])
@@ -154,7 +154,7 @@ func BenchmarkHTTPRoutes(b *testing.B) {
 			require.Empty(b, expected)
 
 			// 5. GET /{id}: resolve 10 distinct URLs without following redirects.
-			for j := 0; j < followCount; j++ {
+			for j := range followCount {
 				_, header := request(http.MethodGet, "/"+ids[j], "", "", http.StatusTemporaryRedirect)
 				require.Equal(b, originals[j], header.Get("Location"))
 			}

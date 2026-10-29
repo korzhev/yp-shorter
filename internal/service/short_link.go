@@ -55,14 +55,14 @@ func (s *Semaphore) Release() {
 
 // ShortLinkService generates short IDs and coordinates repository operations.
 type ShortLinkService struct {
-	// Charset contains the bytes available for ID generation.
-	Charset string
-	// IDLength is the generated short ID length in bytes.
-	IDLength int
 	// ShortLinkDB provides persistent or in-memory link storage.
 	ShortLinkDB model.IShortLinkRepository
 	// DBSemaphore limits concurrent background deletion operations.
 	DBSemaphore *Semaphore
+	// Charset contains the bytes available for ID generation.
+	Charset string
+	// IDLength is the generated short ID length in bytes.
+	IDLength int
 }
 
 // GenerateID returns a random IDLength-byte ID drawn from Charset.
@@ -109,15 +109,13 @@ func (s ShortLinkService) Save(ctx context.Context, link string, userID int) (mo
 }
 
 func (s ShortLinkService) isDuplicateIDError(err error) bool {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		// uniq index error
 		if pgErr.Code == "23505" && pgErr.ConstraintName == "short_links_short_uidx" {
 			return true
 		}
 	}
-	var dError *repository.InMemoryDuplicateIDError
-	if errors.As(err, &dError) {
+	if dError, ok := errors.AsType[*repository.InMemoryDuplicateIDError](err); ok {
 		if dError.ID != "" {
 			return true
 		}

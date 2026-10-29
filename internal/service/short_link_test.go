@@ -315,8 +315,8 @@ func TestIsDuplicateIDError(t *testing.T) {
 	service := ShortLinkService{}
 
 	tests := []struct {
-		name string
 		err  error
+		name string
 		want bool
 	}{
 		{
