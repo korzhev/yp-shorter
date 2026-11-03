@@ -13,6 +13,37 @@
 - `go test -count=1 ./...` - прогон тестов
 - `go test ./cmd/shortener -run '^$' -bench '^BenchmarkHTTPRoutes$' -benchtime=1x -count=1 -benchmem -memprofile=profiles/base.pprof` - прогон бенчмарка с профилировщиком
 
+## JSON-конфигурация
+
+Файл конфигурации можно выбрать через `-c`, `-config` или переменную `CONFIG`.
+Приоритет настроек: **окружение → явные флаги → JSON → значения по умолчанию**.
+Непустой `CONFIG` также имеет приоритет над флагами пути к файлу.
+
+Пример содержимого `C:\goprojects\yp-shorter\config.json`:
+
+```json
+{
+  "server_address": "localhost:8080",
+  "base_url": "http://localhost:8080",
+  "file_storage_path": "links.json",
+  "database_dsn": "",
+  "enable_https": false
+}
+```
+
+```powershell
+go run C:\goprojects\yp-shorter\cmd\shortener -config C:\goprojects\yp-shorter\config.json
+# Альтернатива:
+$env:CONFIG = 'C:\goprojects\yp-shorter\config.json'
+go run C:\goprojects\yp-shorter\cmd\shortener -a localhost:9090
+```
+
+JSON поддерживает все настройки приложения; таблица полей приведена в
+`C:\goprojects\yp-shorter\internal\config\README.md`.
+Комментарии в JSON недопустимы. Если путь не задан, файл не требуется.
+Флаг алфавита коротких ссылок перенесён с `-c` на `-charset`; переменная
+`SH_CHARSET` сохранена.
+
 ## HTTPS
 
 По умолчанию сервер работает по HTTP. Флаг `-s` или переменная окружения

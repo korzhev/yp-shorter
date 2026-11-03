@@ -10,6 +10,7 @@ import (
 )
 
 var configEnvKeys = []string{
+	"CONFIG",
 	"SH_LENGTH",
 	"SERVER_ADDRESS",
 	"BASE_URL",
@@ -90,7 +91,7 @@ func TestParseFlags(t *testing.T) {
 	t.Run("uses flag values", func(t *testing.T) {
 		withTestFlagsAndEnv(t, []string{
 			"shortener",
-			"-c", "abc123",
+			"-charset", "abc123",
 			"-a", ":9090",
 			"-b", "https://short.example.com",
 			"-l", "10",
@@ -135,7 +136,7 @@ func TestParseFlags(t *testing.T) {
 	t.Run("environment variables override flag values", func(t *testing.T) {
 		withTestFlagsAndEnv(t, []string{
 			"shortener",
-			"-c", "abcde",
+			"-charset", "abcde",
 			"-a", ":9090",
 			"-b", "https://flag.example.com",
 			"-l", "10",
