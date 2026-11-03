@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/korzhev/yp-shorter/internal/logger"
@@ -32,7 +33,14 @@ type IShortLinkService interface {
 // Semaphore limits concurrent operations using a buffered channel.
 // Construct it with NewSemaphore; its zero value is not usable.
 type Semaphore struct {
-	semaCh chan struct{}
+	semaCh  chan struct{}
+	workers sync.WaitGroup
+}
+
+// Wait waits for scheduled background deletions, including those awaiting a slot.
+// Call it only after all handlers have finished scheduling work.
+func (s *Semaphore) Wait() {
+	s.workers.Wait()
 }
 
 // NewSemaphore creates a semaphore allowing maxReq concurrent operations.
@@ -164,7 +172,9 @@ func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs 
 	}
 	// run some gorutines
 	for i := 0; i < w; i++ {
+		s.DBSemaphore.workers.Add(1)
 		go func() {
+			defer s.DBSemaphore.workers.Done()
 			s.DBSemaphore.Acquire()
 			defer s.DBSemaphore.Release()
 			j := i * batchSize

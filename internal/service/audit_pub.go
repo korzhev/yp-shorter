@@ -2,6 +2,7 @@ package service
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/korzhev/yp-shorter/internal/logger"
 )
@@ -16,7 +17,13 @@ type AuditRepository interface {
 // Its zero value is ready for registration. Register must not run concurrently
 // with Register or Publish; repositories must support concurrent Save calls.
 type AuditPublisher struct {
-	subs map[string]AuditRepository
+	subs    map[string]AuditRepository
+	workers sync.WaitGroup
+}
+
+// Wait waits for pending audit events. Call it after all publishers have stopped.
+func (p *AuditPublisher) Wait() {
+	p.workers.Wait()
 }
 
 // Register adds ar under name, replacing any existing repository with that name.
@@ -31,7 +38,9 @@ func (p *AuditPublisher) Register(name string, ar AuditRepository) {
 // It does not wait for delivery; save errors are logged rather than returned.
 func (p *AuditPublisher) Publish(action string, userID int, url string) {
 	for _, ar := range p.subs {
+		p.workers.Add(1)
 		go func() {
+			defer p.workers.Done()
 			err := ar.Save(action, strconv.Itoa(userID), url)
 			if err != nil {
 				logger.Log.Errorf("Audit Error",

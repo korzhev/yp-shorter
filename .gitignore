@@ -30,3 +30,7 @@ cmd/shortener/*.json
 .env
 reset.gen.go
 staticlintcli
+
+# Local HTTPS certificate and private key
+/cert.pem
+/key.pem

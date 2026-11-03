@@ -3,13 +3,19 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/bwmarrin/snowflake"
@@ -21,6 +27,73 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNewServerListener(t *testing.T) {
+	fixture := httptest.NewTLSServer(http.NotFoundHandler())
+	t.Cleanup(fixture.Close)
+	certificate := fixture.TLS.Certificates[0]
+	key, err := x509.MarshalPKCS8PrivateKey(certificate.PrivateKey)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	require.NoError(t, os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Certificate[0]}), 0600))
+	require.NoError(t, os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key}), 0600))
+	roots := x509.NewCertPool()
+	roots.AddCert(fixture.Certificate())
+
+	for _, secure := range []bool{false, true} {
+		scheme := "http"
+		if secure {
+			scheme = "https"
+		}
+		t.Run(scheme, func(t *testing.T) {
+			c := config.Config{RunAddr: "127.0.0.1:0", EnableHTTPS: secure}
+			if secure {
+				c.TLSCertFile, c.TLSKeyFile = certPath, keyPath
+			}
+			listener, err := newServerListener(c)
+			require.NoError(t, err)
+			server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, secure, r.TLS != nil)
+				w.WriteHeader(http.StatusNoContent)
+			})}
+			done := make(chan error, 1)
+			go func() { done <- server.Serve(listener) }()
+			t.Cleanup(func() {
+				require.NoError(t, server.Close())
+				require.ErrorIs(t, <-done, http.ErrServerClosed)
+			})
+			transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+			defer transport.CloseIdleConnections()
+			client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+			response, err := client.Get(scheme + "://" + listener.Addr().String())
+			require.NoError(t, err)
+			require.NoError(t, response.Body.Close())
+			assert.Equal(t, http.StatusNoContent, response.StatusCode)
+		})
+	}
+
+	invalidPath := filepath.Join(dir, "invalid.pem")
+	require.NoError(t, os.WriteFile(invalidPath, []byte("invalid PEM"), 0600))
+	for _, tt := range []struct {
+		name string
+		cert string
+		key  string
+	}{
+		{"missing certificate", "", keyPath},
+		{"missing key", certPath, ""},
+		{"invalid certificate", invalidPath, keyPath},
+		{"invalid key", certPath, invalidPath},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			listener, err := newServerListener(config.Config{
+				RunAddr: "127.0.0.1:0", EnableHTTPS: true, TLSCertFile: tt.cert, TLSKeyFile: tt.key,
+			})
+			require.ErrorContains(t, err, "load HTTPS certificate and key")
+			assert.Nil(t, listener)
+		})
+	}
+}
 
 func TestRootRouter(t *testing.T) {
 	const baseResultAddr = "http://short.test"
