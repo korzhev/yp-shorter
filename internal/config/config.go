@@ -26,6 +26,8 @@ const (
 
 // Config holds application settings loaded from JSON, flags and environment variables.
 type Config struct {
+	// TrustedSubnet is the CIDR allowed to access internal statistics; empty denies all.
+	TrustedSubnet string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 	// RunAddr is the HTTP server listen address.
 	RunAddr string `env:"SERVER_ADDRESS" json:"server_address"`
 	// EnableHTTPS enables TLS for the application server.
@@ -91,6 +93,7 @@ func ParseFlags() error {
 	flag.StringVar(&configPath, "config", "", "path to JSON configuration file")
 	flag.StringVar(&Conf.ShortLinkCharset, "charset", DefaultCharset, "chars to use in id generator")
 	flag.StringVar(&Conf.RunAddr, "a", ":8080", "address and port to run server")
+	flag.StringVar(&Conf.TrustedSubnet, "t", "", "trusted subnet CIDR for internal statistics")
 	flag.BoolVar(&Conf.EnableHTTPS, "s", false, "enable HTTPS")
 	flag.StringVar(&Conf.TLSCertFile, "tls-cert", "cert.pem", "path to TLS certificate PEM file")
 	flag.StringVar(&Conf.TLSKeyFile, "tls-key", "key.pem", "path to TLS private key PEM file")

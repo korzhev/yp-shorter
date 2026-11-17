@@ -10,6 +10,7 @@ import (
 )
 
 var configEnvKeys = []string{
+	"TRUSTED_SUBNET",
 	"CONFIG",
 	"SH_LENGTH",
 	"SERVER_ADDRESS",

@@ -64,18 +64,22 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 	r := chi.NewRouter()
 
 	r.Use(middleware.NewLoggerMiddleware(logger.Log))
-	r.Use(middleware.NewAuthMiddleware(c, node))
 	r.Use(middleware.NewCompressorMiddleware())
 	r.Use(chiMW.RedirectSlashes)
 	r.Use(chiMW.Recoverer)
 
-	r.Get("/{id}", ShortLinkHandler.GetByIDLinkHandlerFunc)
-	r.Post("/", ShortLinkHandler.SaveLinkHandlerFunc)
-	r.Post("/api/shorten", ShortLinkHandler.APISaveLinkHandlerFunc)
-	r.Post("/api/shorten/batch", ShortLinkHandler.APISaveLinkBatchHandlerFunc)
-	r.Get("/api/user/urls", ShortLinkHandler.APIGetLinksByUserIDHandlerFunc)
-	r.Delete("/api/user/urls", ShortLinkHandler.APIDeleteLinkBatchHandlerFunc)
-	r.Get("/ping", PingHandler.PingHandlerFunc)
+	statsHandler := handler.StatsHandler{Service: service.StatsService{Repository: db}}
+	r.With(middleware.NewTrustedSubnetMiddleware(c.TrustedSubnet)).Get("/api/internal/stats", statsHandler.StatsHandlerFunc)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.NewAuthMiddleware(c, node))
+		r.Get("/{id}", ShortLinkHandler.GetByIDLinkHandlerFunc)
+		r.Post("/", ShortLinkHandler.SaveLinkHandlerFunc)
+		r.Post("/api/shorten", ShortLinkHandler.APISaveLinkHandlerFunc)
+		r.Post("/api/shorten/batch", ShortLinkHandler.APISaveLinkBatchHandlerFunc)
+		r.Get("/api/user/urls", ShortLinkHandler.APIGetLinksByUserIDHandlerFunc)
+		r.Delete("/api/user/urls", ShortLinkHandler.APIDeleteLinkBatchHandlerFunc)
+		r.Get("/ping", PingHandler.PingHandlerFunc)
+	})
 	return r
 }
 

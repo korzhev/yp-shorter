@@ -1,5 +1,6 @@
 {
   "server_address": ":8080",
+  "trusted_subnet": "",
   "base_url": "http://localhost:8080",
   "enable_https": false,
   "tls_cert_file": "cert.pem",
