@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/korzhev/yp-shorter/internal/logger"
+	"golang.org/x/sync/errgroup"
 )
 
 // AuditRepository persists or forwards audit events.
@@ -16,7 +17,14 @@ type AuditRepository interface {
 // Its zero value is ready for registration. Register must not run concurrently
 // with Register or Publish; repositories must support concurrent Save calls.
 type AuditPublisher struct {
-	subs map[string]AuditRepository
+	subs    map[string]AuditRepository
+	workers errgroup.Group
+}
+
+// Wait drains all pending events and returns the first delivery error, if any.
+// Call it after all publishers have stopped.
+func (p *AuditPublisher) Wait() error {
+	return p.workers.Wait()
 }
 
 // Register adds ar under name, replacing any existing repository with that name.
@@ -31,7 +39,7 @@ func (p *AuditPublisher) Register(name string, ar AuditRepository) {
 // It does not wait for delivery; save errors are logged rather than returned.
 func (p *AuditPublisher) Publish(action string, userID int, url string) {
 	for _, ar := range p.subs {
-		go func() {
+		p.workers.Go(func() error {
 			err := ar.Save(action, strconv.Itoa(userID), url)
 			if err != nil {
 				logger.Log.Errorf("Audit Error",
@@ -41,6 +49,7 @@ func (p *AuditPublisher) Publish(action string, userID int, url string) {
 					"url", url,
 				)
 			}
-		}()
+			return err
+		})
 	}
 }
