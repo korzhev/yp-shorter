@@ -19,7 +19,11 @@
 Приоритет настроек: **окружение → явные флаги → JSON → значения по умолчанию**.
 Непустой `CONFIG` также имеет приоритет над флагами пути к файлу.
 
-Пример содержимого `C:\goprojects\yp-shorter\config.json`:
+Полный пример со значениями по умолчанию: [`config.example.json`](./config.example.json).
+Скопируйте его в `./config.json` и измените нужные параметры.
+Все команды ниже выполняются из корня репозитория.
+
+Пример содержимого `./config.json`:
 
 ```json
 {
@@ -32,14 +36,14 @@
 ```
 
 ```powershell
-go run C:\goprojects\yp-shorter\cmd\shortener -config C:\goprojects\yp-shorter\config.json
+go run ./cmd/shortener -config ./config.json
 # Альтернатива:
-$env:CONFIG = 'C:\goprojects\yp-shorter\config.json'
-go run C:\goprojects\yp-shorter\cmd\shortener -a localhost:9090
+$env:CONFIG = './config.json'
+go run ./cmd/shortener -a localhost:9090
 ```
 
 JSON поддерживает все настройки приложения; таблица полей приведена в
-`C:\goprojects\yp-shorter\internal\config\README.md`.
+[`internal/config/README.md`](./internal/config/README.md).
 Комментарии в JSON недопустимы. Если путь не задан, файл не требуется.
 Флаг алфавита коротких ссылок перенесён с `-c` на `-charset`; переменная
 `SH_CHARSET` сохранена.
@@ -57,10 +61,19 @@ JSON поддерживает все настройки приложения; т
 При отсутствии или некорректности файлов сервер сообщает об ошибке и не
 запускается; автоматического перехода на HTTP нет. В HTTP-режиме файлы не нужны.
 
+Для локальной разработки создайте самоподписанный сертификат и ключ
+из корня репозитория (требуется установленный OpenSSL):
+
+```sh
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+Этот сертификат подходит только для локальной разработки.
+Для рабочего окружения используйте сертификат доверенного центра сертификации.
+
 Пример запуска в PowerShell после подготовки сертификата и ключа:
 
 ```powershell
-Set-Location C:\goprojects\yp-shorter
 go run ./cmd/shortener -s -b https://localhost:8080
 # Альтернатива:
 $env:ENABLE_HTTPS = 'true'
@@ -112,7 +125,9 @@ kill -QUIT "$SERVER_PID"
 
 ## Метаданные сборки
 
-Версия, дата и коммит выводятся при запуске. Без параметров сборки каждое
+Версия, дата и коммит выводятся при запуске через структурированный логгер
+в полях `version`, `date` и `commit` события `Build metadata` (уровень `info`).
+Без параметров сборки каждое
 значение равно `N/A`. Передать их можно через `-ldflags` и флаг `-X`:
 
 ```sh

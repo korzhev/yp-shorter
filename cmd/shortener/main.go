@@ -82,9 +82,11 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer stop()
-	fmt.Printf("Build version: %s\n", buildVersion)
-	fmt.Printf("Build date: %s\n", buildDate)
-	fmt.Printf("Build commit: %s\n", buildCommit)
+	if err := logger.InitLogger("info"); err != nil {
+		fmt.Printf("Initialize logger: %v\n", err)
+		return
+	}
+	defer func() { _ = logger.Log.Sync() }()
 
 	err := config.ParseFlags()
 	if err != nil {
@@ -92,11 +94,11 @@ func main() {
 		return
 	}
 	config.Conf.DetectStorageType()
-	errl := logger.InitLogger(config.Conf.LogLevel)
-	if errl != nil {
-		fmt.Printf("err: %v", errl)
+	if err := logger.InitLogger(config.Conf.LogLevel); err != nil {
+		logger.Log.Errorw("Initialize configured logger", "error", err)
+		return
 	}
-	defer func() { _ = logger.Log.Sync() }()
+	logger.Log.Infow("Build metadata", "version", buildVersion, "date", buildDate, "commit", buildCommit)
 
 	logger.Log.Infow("Server starting with params",
 		"address", config.Conf.RunAddr,
@@ -129,7 +131,11 @@ func main() {
 	}()
 
 	s := service.NewSemaphore(10)
-	defer s.Wait()
+	defer func() {
+		if err := s.Wait(); err != nil {
+			logger.Log.Errorw("Background deletions failed", "error", err)
+		}
+	}()
 	node, err := snowflake.NewNode(1)
 	if err != nil {
 		logger.Log.Fatalw(
@@ -159,7 +165,11 @@ func main() {
 		ha := repository.NewHTTPAudit(config.Conf.AuditURL)
 		ap.Register("url", ha)
 	}
-	defer ap.Wait()
+	defer func() {
+		if err := ap.Wait(); err != nil {
+			logger.Log.Errorw("Background audit delivery failed", "error", err)
+		}
+	}()
 
 	r := RootRouter(config.Conf, db, s, node, ap)
 
