@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,6 +50,14 @@ func (af *FileAudit) Save(action, userID, url string) error {
 		return err
 	}
 	return nil
+}
+
+// Close syncs and closes the audit file after all publishers have stopped.
+func (af *FileAudit) Close() error {
+	af.Lock()
+	defer af.Unlock()
+	syncErr := af.File.Sync()
+	return errors.Join(syncErr, af.File.Close())
 }
 
 // NewFileAudit opens or creates path for appending audit events.

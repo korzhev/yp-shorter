@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -393,12 +394,16 @@ func (s *ShortLinkDB) DeleteBatch(ctx context.Context, userID int, batch []strin
 	return err
 }
 
-// Close closes the file or database pool for the selected backend.
+// Close saves and syncs file storage or closes the database pool.
 // It is a no-op for the in-memory backend.
 func (s *ShortLinkDB) Close() error {
 	switch s.storageType {
 	case config.File:
-		return s.storage.F.Close()
+		s.storage.Lock()
+		defer s.storage.Unlock()
+		saveErr := s.saveFile()
+		syncErr := s.storage.F.Sync()
+		return errors.Join(saveErr, syncErr, s.storage.F.Close())
 	case config.Database:
 		return s.DB.Close()
 	default:

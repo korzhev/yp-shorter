@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os/signal"
+	"syscall"
 
 	"github.com/bwmarrin/snowflake"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -24,6 +30,22 @@ var (
 	buildDate    = "N/A"
 	buildCommit  = "N/A"
 )
+
+// newServerListener opens the application listener, using TLS only when enabled.
+func newServerListener(c config.Config) (net.Listener, error) {
+	if !c.EnableHTTPS {
+		return net.Listen("tcp", c.RunAddr)
+	}
+
+	certificate, err := tls.LoadX509KeyPair(c.TLSCertFile, c.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load HTTPS certificate and key: %w", err)
+	}
+	return tls.Listen("tcp", c.RunAddr, &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS12,
+	})
+}
 
 func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphore, node *snowflake.Node, ap *service.AuditPublisher) chi.Router {
 	var ShortLinkHandler = handler.ShortLinkHandler{
@@ -58,9 +80,13 @@ func RootRouter(c config.Config, db *repository.ShortLinkDB, s *service.Semaphor
 }
 
 func main() {
-	fmt.Printf("Build version: %s\n", buildVersion)
-	fmt.Printf("Build date: %s\n", buildDate)
-	fmt.Printf("Build commit: %s\n", buildCommit)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	defer stop()
+	if err := logger.InitLogger("info"); err != nil {
+		fmt.Printf("Initialize logger: %v\n", err)
+		return
+	}
+	defer func() { _ = logger.Log.Sync() }()
 
 	err := config.ParseFlags()
 	if err != nil {
@@ -68,14 +94,15 @@ func main() {
 		return
 	}
 	config.Conf.DetectStorageType()
-	errl := logger.InitLogger(config.Conf.LogLevel)
-	if errl != nil {
-		fmt.Printf("err: %v", errl)
+	if err := logger.InitLogger(config.Conf.LogLevel); err != nil {
+		logger.Log.Errorw("Initialize configured logger", "error", err)
+		return
 	}
-	defer func() { _ = logger.Log.Sync() }()
+	logger.Log.Infow("Build metadata", "version", buildVersion, "date", buildDate, "commit", buildCommit)
 
 	logger.Log.Infow("Server starting with params",
 		"address", config.Conf.RunAddr,
+		"enableHTTPS", config.Conf.EnableHTTPS,
 		"baseUrl", config.Conf.BaseResultAddr,
 		"shortlinkLength", config.Conf.ShortLinkLength,
 		"charsetLength", len(config.Conf.ShortLinkCharset),
@@ -97,9 +124,18 @@ func main() {
 	}
 
 	db := repository.NewShortLinkDB(config.Conf.FileStoragePath, config.Conf.DBDSN, config.Conf.StorageType)
-	defer func() { _ = db.Close() }()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Log.Errorf("Close storage: %v", err)
+		}
+	}()
 
 	s := service.NewSemaphore(10)
+	defer func() {
+		if err := s.Wait(); err != nil {
+			logger.Log.Errorw("Background deletions failed", "error", err)
+		}
+	}()
 	node, err := snowflake.NewNode(1)
 	if err != nil {
 		logger.Log.Fatalw(
@@ -119,24 +155,68 @@ func main() {
 			)
 		}
 		ap.Register("file", fa)
+		defer func() {
+			if err := fa.Close(); err != nil {
+				logger.Log.Errorf("Close file audit: %v", err)
+			}
+		}()
 	}
 	if config.Conf.AuditURL != "" {
 		ha := repository.NewHTTPAudit(config.Conf.AuditURL)
 		ap.Register("url", ha)
 	}
+	defer func() {
+		if err := ap.Wait(); err != nil {
+			logger.Log.Errorw("Background audit delivery failed", "error", err)
+		}
+	}()
 
 	r := RootRouter(config.Conf, db, s, node, ap)
 
 	// For profiler
 	if config.Conf.UseProfiler {
+		profiler := &http.Server{Addr: "127.0.0.1:6060"}
+		defer func() {
+			if err := profiler.Shutdown(context.Background()); err != nil {
+				logger.Log.Errorf("Shutdown pprof server: %v", err)
+			}
+		}()
 		go func() {
-			if profilerErr := http.ListenAndServe("127.0.0.1:6060", nil); profilerErr != nil {
+			if profilerErr := profiler.ListenAndServe(); profilerErr != nil && !errors.Is(profilerErr, http.ErrServerClosed) {
 				logger.Log.Errorf("pprof server: %v", profilerErr)
 			}
 		}()
 	}
-	err = http.ListenAndServe(config.Conf.RunAddr, r)
+	listener, err := newServerListener(config.Conf)
 	if err != nil {
 		logger.Log.Errorf("Error starting server: %s\n", err)
+		return
+	}
+	err = serveUntilShutdown(ctx, &http.Server{Handler: r}, listener)
+	if err != nil {
+		logger.Log.Errorf("Error starting server: %s\n", err)
+	}
+}
+
+// serveUntilShutdown drains active requests before returning, including on a
+// listener error. The signal context must not be used as the request context.
+func serveUntilShutdown(ctx context.Context, server *http.Server, listener net.Listener) error {
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(listener) }()
+
+	var serveErr error
+	select {
+	case <-ctx.Done():
+		shutdownErr := server.Shutdown(context.Background())
+		serveErr = <-done
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(serveErr, shutdownErr)
+	case serveErr = <-done:
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(serveErr, server.Shutdown(context.Background()))
 	}
 }

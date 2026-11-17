@@ -9,6 +9,7 @@ import (
 	"github.com/korzhev/yp-shorter/internal/logger"
 	"github.com/korzhev/yp-shorter/internal/model"
 	"github.com/korzhev/yp-shorter/internal/repository"
+	"golang.org/x/sync/errgroup"
 )
 
 // IShortLinkService defines ID generation and short link operations.
@@ -32,7 +33,15 @@ type IShortLinkService interface {
 // Semaphore limits concurrent operations using a buffered channel.
 // Construct it with NewSemaphore; its zero value is not usable.
 type Semaphore struct {
-	semaCh chan struct{}
+	semaCh  chan struct{}
+	workers errgroup.Group
+}
+
+// Wait waits for scheduled background deletions, including those awaiting a slot.
+// It returns the first deletion error after all operations have finished.
+// Call it only after all handlers have finished scheduling work.
+func (s *Semaphore) Wait() error {
+	return s.workers.Wait()
 }
 
 // NewSemaphore creates a semaphore allowing maxReq concurrent operations.
@@ -164,7 +173,7 @@ func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs 
 	}
 	// run some gorutines
 	for i := 0; i < w; i++ {
-		go func() {
+		s.DBSemaphore.workers.Go(func() error {
 			s.DBSemaphore.Acquire()
 			defer s.DBSemaphore.Release()
 			j := i * batchSize
@@ -172,9 +181,10 @@ func (s ShortLinkService) DeleteBatch(ctx context.Context, userID int, shortIDs 
 			// task says that there is no need to notify
 			err := s.ShortLinkDB.DeleteBatch(context.Background(), userID, shortIDs[j:k])
 			if err != nil {
-				logger.Log.Errorw("Cannot decode request JSON body", "error", err)
+				logger.Log.Errorw("Delete links batch", "error", err)
 			}
-		}() // no need to wait for gorutines
+			return err
+		}) // no need to wait for goroutines
 	}
 	return nil
 }

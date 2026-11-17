@@ -1,0 +1,17 @@
+{
+  "server_address": ":8080",
+  "base_url": "http://localhost:8080",
+  "enable_https": false,
+  "tls_cert_file": "cert.pem",
+  "tls_key_file": "key.pem",
+  "sh_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  "sh_length": 6,
+  "log_level": "info",
+  "file_storage_path": "",
+  "database_dsn": "",
+  "token_secret": "",
+  "token_exp_minutes": 5,
+  "audit_file": "",
+  "audit_url": "",
+  "use_profiler": false
+}
